@@ -47,11 +47,11 @@ lib/
 
 All application Dart code is in `lib/main.dart`, just like the supplied base code. `main()` runs `MiniShopApp`. Section comments separate colors/theme, product models and data, shopping state, the main application, shared widgets, splash/transition, menu/filter controls, product cards, product details, cart, cafe information, the 3D painter, and widget previews. There are no local Dart imports or `part` files.
 
-Images, fonts, and their `pubspec.yaml` declarations remain separate assets. Tests live under `test/` and import `main.dart`.
+Product photos, the logo, and cafe images are in `assets/images/`; fonts are in `assets/fonts/`. Both are declared in `pubspec.yaml`. Tests live under `test/` and import `main.dart`.
 
-The original Flutter starter is preserved in `docs/flutter_starter.dart.txt`. The supplied website remains in `SmoochCafe/`.
+The original Flutter starter is preserved in `docs/flutter_starter.dart.txt`. The app runs from the catalog in `main.dart` and the bundled assets; the original website folder is optional.
 
-After changing the website's menu, regenerate the catalog with Node.js:
+Edit products directly in the `PRODUCT DATA` section of `main.dart`. If the original website is available at `SmoochCafe/pages/products.html`, you can also regenerate the catalog with Node.js:
 
 ```sh
 node tools/import_menu.mjs

@@ -1,10 +1,15 @@
 // Import the supplied website's names, prices, categories, and image paths.
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { posix } from 'node:path';
 
 const root = new URL('../', import.meta.url);
-const imageFiles = new Set(readdirSync(new URL('SmoochCafe/images/', root)));
-const source = readFileSync(new URL('SmoochCafe/pages/products.html', root), 'utf8');
+const imageFiles = new Set(readdirSync(new URL('assets/images/', root)));
+const sourcePath = new URL('SmoochCafe/pages/products.html', root);
+if (!existsSync(sourcePath)) {
+  throw Error('Optional source website is missing: SmoochCafe/pages/products.html. Edit the product data in lib/main.dart directly, or restore the source website before importing. No files changed.');
+}
+const source = readFileSync(sourcePath, 'utf8');
 const decode = (text) => text.replaceAll('&amp;', '&').replaceAll('&#39;', "'").replaceAll('&quot;', '"');
 const cards = source.split(/<div class="product-card" data-name="([^"]+)" data-price="([^"]+)">/);
 const food = ['Quarter Pounder', 'Sandwiches', 'Quesadilla', 'French Fries', 'Fries', 'Rice Bowls', 'Pasta', 'Nachos'];
@@ -20,7 +25,7 @@ const featured = ['Tiramisu Latte', 'Classic Burger', 'Chocolate Bliss', 'Spanis
 const products = [];
 for (let i = 1; i < cards.length; i += 3) {
   const [name, price, body] = [decode(cards[i]), Number(cards[i + 1]), cards[i + 2]];
-  const image = `SmoochCafe/${decode(body.match(/<img src="([^"]+)"/)[1]).replace('../', '')}`;
+  const image = `assets/images/${posix.basename(decode(body.match(/<img src="([^"]+)"/)[1]))}`;
   const category = decode(body.match(/<div class="product-tag">([^<]+)/)[1]).trim();
   const group = food.includes(category) ? 'Food' : pastry.includes(category) ? 'Pastries' : ['Coffee', 'Non-Coffee', 'Ice Blended'].includes(category) ? category : 'More Drinks';
   if (!existsSync(new URL(image, root))) throw Error(`Missing image: ${image}`);

@@ -4,21 +4,29 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
 
-// ============================================================
-// SMOOCH CAFE - CUSTOMIZED MINISHOP STARTER
-// ============================================================
-
-// The application stays in this file, following the supplied starter.
-// Customize colors, products, and screens in the sections below.
-// Images and fonts are declared in pubspec.yaml.
-
 void main() {
   runApp(const MiniShopApp());
 }
 
 // ============================================================
-// APPLICATION COLORS AND THEME
+// FINAL PROJECT STARTER CODE
+// Customize this application based on your chosen e-commerce.
+//
+// IMPORTANT:
+// The required Start Screen is intentionally NOT included.
+// Create your own StartScreen and use Navigator.push() on a
+// button to open HomeScreen.
+//
+// After creating StartScreen, change:
+//   home: const HomeScreen(),
+// to:
+//   home: const StartScreen(),
 // ============================================================
+
+// ============================================================
+// APPLICATION COLORS
+// Customize these colors to match your selected e-commerce.
+// ======================================
 abstract final class AppColors {
   static const dark = Color(0xFF0A4952);
   static const teal = Color(0xFF0E6F7A);
@@ -182,7 +190,7 @@ const cafeProducts = <Product>[
     category: "Coffee",
     group: "Coffee",
     description: "Espresso-based latte with tiramisu-inspired cream. A little coffee, a little dessert, and a whole lot of comfort.",
-    image: "SmoochCafe/images//Tiramisu Latte 5.png",
+    image: "assets/images/Tiramisu Latte 5.png",
     featured: true,
   ),
   Product(
@@ -192,7 +200,7 @@ const cafeProducts = <Product>[
     category: "Quarter Pounder",
     group: "Food",
     description: "A juicy quarter-pound patty with cheese and fresh veggies. Your comfort-food favorite, made to pair with a Smooch drink.",
-    image: "SmoochCafe/images/Classic Burger.png",
+    image: "assets/images/Classic Burger.png",
     featured: true,
   ),
   Product(
@@ -202,7 +210,7 @@ const cafeProducts = <Product>[
     category: "Brownies",
     group: "Pastries",
     description: "A fudgy chocolate brownie with a rich, moist center. The perfect little companion to your favorite coffee.",
-    image: "SmoochCafe/images/Chocolate Bliss 2.png",
+    image: "assets/images/Chocolate Bliss 2.png",
     featured: true,
   ),
   Product(
@@ -212,7 +220,7 @@ const cafeProducts = <Product>[
     category: "Coffee",
     group: "Coffee",
     description: "Espresso and milk with a sweet, creamy finish. A comforting coffee for slow afternoons.",
-    image: "SmoochCafe/images/Spanish Latte 5.png",
+    image: "assets/images/Spanish Latte 5.png",
     featured: true,
   ),
   Product(
@@ -222,7 +230,7 @@ const cafeProducts = <Product>[
     category: "Non-Coffee",
     group: "Non-Coffee",
     description: "Earthy matcha meets sweet strawberry and milk for a colorful sip of happiness.",
-    image: "SmoochCafe/images/Strawberry Matcha 1.png",
+    image: "assets/images/Strawberry Matcha 1.png",
     featured: true,
   ),
   Product(
@@ -232,7 +240,7 @@ const cafeProducts = <Product>[
     category: "Cakes",
     group: "Pastries",
     description: "A sweet little moment from our cakes selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Basque Cheesecake 1.png",
+    image: "assets/images/Basque Cheesecake 1.png",
     featured: true,
   ),
   Product(
@@ -242,7 +250,7 @@ const cafeProducts = <Product>[
     category: "Quarter Pounder",
     group: "Food",
     description: "A comforting pick from our quarter pounder menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Hawaiian Burger.png",
+    image: "assets/images/Hawaiian Burger.png",
     featured: false,
   ),
   Product(
@@ -252,7 +260,7 @@ const cafeProducts = <Product>[
     category: "Quarter Pounder",
     group: "Food",
     description: "A comforting pick from our quarter pounder menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Sunrise Burger.png",
+    image: "assets/images/Sunrise Burger.png",
     featured: false,
   ),
   Product(
@@ -262,7 +270,7 @@ const cafeProducts = <Product>[
     category: "Quarter Pounder",
     group: "Food",
     description: "A comforting pick from our quarter pounder menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Bacon Cheese Burger.png",
+    image: "assets/images/Bacon Cheese Burger.png",
     featured: false,
   ),
   Product(
@@ -272,7 +280,7 @@ const cafeProducts = <Product>[
     category: "Quarter Pounder",
     group: "Food",
     description: "A comforting pick from our quarter pounder menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Double Classic Burger.png",
+    image: "assets/images/Double Classic Burger.png",
     featured: false,
   ),
   Product(
@@ -282,7 +290,7 @@ const cafeProducts = <Product>[
     category: "Sandwiches",
     group: "Food",
     description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Classic Chicken Sandwich.png",
+    image: "assets/images/Classic Chicken Sandwich.png",
     featured: false,
   ),
   Product(
@@ -292,7 +300,7 @@ const cafeProducts = <Product>[
     category: "Sandwiches",
     group: "Food",
     description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Club House Sandwich.png",
+    image: "assets/images/Club House Sandwich.png",
     featured: false,
   ),
   Product(
@@ -302,7 +310,7 @@ const cafeProducts = <Product>[
     category: "Sandwiches",
     group: "Food",
     description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Grilled Cheese Sandwich.png",
+    image: "assets/images/Grilled Cheese Sandwich.png",
     featured: false,
   ),
   Product(
@@ -312,7 +320,7 @@ const cafeProducts = <Product>[
     category: "Sandwiches",
     group: "Food",
     description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Grilled Ham & Cheese Sandwich.png",
+    image: "assets/images/Grilled Ham & Cheese Sandwich.png",
     featured: false,
   ),
   Product(
@@ -322,7 +330,7 @@ const cafeProducts = <Product>[
     category: "Sandwiches",
     group: "Food",
     description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Tuna Sandwich.png",
+    image: "assets/images/Tuna Sandwich.png",
     featured: false,
   ),
   Product(
@@ -332,7 +340,7 @@ const cafeProducts = <Product>[
     category: "Sandwiches",
     group: "Food",
     description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Chicken Sandwich.png",
+    image: "assets/images/Chicken Sandwich.png",
     featured: false,
   ),
   Product(
@@ -342,7 +350,7 @@ const cafeProducts = <Product>[
     category: "Quesadilla",
     group: "Food",
     description: "A comforting pick from our quesadilla menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Cheese Quesadilla.png",
+    image: "assets/images/Cheese Quesadilla.png",
     featured: false,
   ),
   Product(
@@ -352,7 +360,7 @@ const cafeProducts = <Product>[
     category: "Quesadilla",
     group: "Food",
     description: "A comforting pick from our quesadilla menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Bacon Quesadilla.png",
+    image: "assets/images/Bacon Quesadilla.png",
     featured: false,
   ),
   Product(
@@ -362,7 +370,7 @@ const cafeProducts = <Product>[
     category: "Quesadilla",
     group: "Food",
     description: "A comforting pick from our quesadilla menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Chicken Quesadilla.png",
+    image: "assets/images/Chicken Quesadilla.png",
     featured: false,
   ),
   Product(
@@ -372,7 +380,7 @@ const cafeProducts = <Product>[
     category: "Quesadilla",
     group: "Food",
     description: "A comforting pick from our quesadilla menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Tapa Quesadilla.png",
+    image: "assets/images/Tapa Quesadilla.png",
     featured: false,
   ),
   Product(
@@ -382,7 +390,7 @@ const cafeProducts = <Product>[
     category: "French Fries",
     group: "Food",
     description: "A comforting pick from our french fries menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Plain Fries.png",
+    image: "assets/images/Plain Fries.png",
     featured: false,
   ),
   Product(
@@ -392,7 +400,7 @@ const cafeProducts = <Product>[
     category: "French Fries",
     group: "Food",
     description: "A comforting pick from our french fries menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/BBQ Fries.png",
+    image: "assets/images/BBQ Fries.png",
     featured: false,
   ),
   Product(
@@ -402,7 +410,7 @@ const cafeProducts = <Product>[
     category: "French Fries",
     group: "Food",
     description: "A comforting pick from our french fries menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Cheese Fries.png",
+    image: "assets/images/Cheese Fries.png",
     featured: false,
   ),
   Product(
@@ -412,7 +420,7 @@ const cafeProducts = <Product>[
     category: "French Fries",
     group: "Food",
     description: "A comforting pick from our french fries menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Sour Cream Fries.png",
+    image: "assets/images/Sour Cream Fries.png",
     featured: false,
   ),
   Product(
@@ -422,7 +430,7 @@ const cafeProducts = <Product>[
     category: "Rice Bowls",
     group: "Food",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Longanisa Rice Bowl.png",
+    image: "assets/images/Longanisa Rice Bowl.png",
     featured: false,
   ),
   Product(
@@ -432,7 +440,7 @@ const cafeProducts = <Product>[
     category: "Rice Bowls",
     group: "Food",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Bacon Rice Bowl.png",
+    image: "assets/images/Bacon Rice Bowl.png",
     featured: false,
   ),
   Product(
@@ -442,7 +450,7 @@ const cafeProducts = <Product>[
     category: "Rice Bowls",
     group: "Food",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Sisig Rice Bowl.png",
+    image: "assets/images/Sisig Rice Bowl.png",
     featured: false,
   ),
   Product(
@@ -452,7 +460,7 @@ const cafeProducts = <Product>[
     category: "Rice Bowls",
     group: "Food",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Chicken Steak Rice Bowl.png",
+    image: "assets/images/Chicken Steak Rice Bowl.png",
     featured: false,
   ),
   Product(
@@ -462,7 +470,7 @@ const cafeProducts = <Product>[
     category: "Rice Bowls",
     group: "Food",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Burger Steak Rice Bowl .png",
+    image: "assets/images/Burger Steak Rice Bowl .png",
     featured: false,
   ),
   Product(
@@ -472,7 +480,7 @@ const cafeProducts = <Product>[
     category: "Rice Bowls",
     group: "Food",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Beef Tapa Rice Bowl.png",
+    image: "assets/images/Beef Tapa Rice Bowl.png",
     featured: false,
   ),
   Product(
@@ -482,7 +490,7 @@ const cafeProducts = <Product>[
     category: "Rice Bowls",
     group: "Food",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Savory Tapa Rice Bowl.png",
+    image: "assets/images/Savory Tapa Rice Bowl.png",
     featured: false,
   ),
   Product(
@@ -492,7 +500,7 @@ const cafeProducts = <Product>[
     category: "Rice Bowls",
     group: "Food",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Chicken BBQ Rice Bowl.png",
+    image: "assets/images/Chicken BBQ Rice Bowl.png",
     featured: false,
   ),
   Product(
@@ -502,7 +510,7 @@ const cafeProducts = <Product>[
     category: "Rice Bowls",
     group: "Food",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Chicken Teriyaki Rice Bowl.png",
+    image: "assets/images/Chicken Teriyaki Rice Bowl.png",
     featured: false,
   ),
   Product(
@@ -512,7 +520,7 @@ const cafeProducts = <Product>[
     category: "Pasta",
     group: "Food",
     description: "A comforting pick from our pasta menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Lasagana 1.png",
+    image: "assets/images/Lasagana 1.png",
     featured: false,
   ),
   Product(
@@ -522,7 +530,7 @@ const cafeProducts = <Product>[
     category: "Pasta",
     group: "Food",
     description: "A comforting pick from our pasta menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Carbonara 1.png",
+    image: "assets/images/Carbonara 1.png",
     featured: false,
   ),
   Product(
@@ -532,7 +540,7 @@ const cafeProducts = <Product>[
     category: "Pasta",
     group: "Food",
     description: "A comforting pick from our pasta menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Spaghetti Bolognese 1.png",
+    image: "assets/images/Spaghetti Bolognese 1.png",
     featured: false,
   ),
   Product(
@@ -542,7 +550,7 @@ const cafeProducts = <Product>[
     category: "Nachos",
     group: "Food",
     description: "A comforting pick from our nachos menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Beef Nachos 1.png",
+    image: "assets/images/Beef Nachos 1.png",
     featured: false,
   ),
   Product(
@@ -552,7 +560,7 @@ const cafeProducts = <Product>[
     category: "Nachos",
     group: "Food",
     description: "A comforting pick from our nachos menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Nacho Fries 1.png",
+    image: "assets/images/Nacho Fries 1.png",
     featured: false,
   ),
   Product(
@@ -562,7 +570,7 @@ const cafeProducts = <Product>[
     category: "Nachos",
     group: "Food",
     description: "A comforting pick from our nachos menu. Pair it with your favorite handcrafted drink.",
-    image: "SmoochCafe/images/Cheesy Bacon Fries 1.png",
+    image: "assets/images/Cheesy Bacon Fries 1.png",
     featured: false,
   ),
   Product(
@@ -572,7 +580,7 @@ const cafeProducts = <Product>[
     category: "Brownies",
     group: "Pastries",
     description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Caramel Treat 2.png",
+    image: "assets/images/Caramel Treat 2.png",
     featured: false,
   ),
   Product(
@@ -582,7 +590,7 @@ const cafeProducts = <Product>[
     category: "Brownies",
     group: "Pastries",
     description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Brookies 1.png",
+    image: "assets/images/Brookies 1.png",
     featured: false,
   ),
   Product(
@@ -592,7 +600,7 @@ const cafeProducts = <Product>[
     category: "Brownies",
     group: "Pastries",
     description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Revel Bar 1.png",
+    image: "assets/images/Revel Bar 1.png",
     featured: false,
   ),
   Product(
@@ -602,7 +610,7 @@ const cafeProducts = <Product>[
     category: "Brownies",
     group: "Pastries",
     description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Velvet Swirl Bar 1.png",
+    image: "assets/images/Velvet Swirl Bar 1.png",
     featured: false,
   ),
   Product(
@@ -612,7 +620,7 @@ const cafeProducts = <Product>[
     category: "Brownies",
     group: "Pastries",
     description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Biscoff Blandies 1.png",
+    image: "assets/images/Biscoff Blandies 1.png",
     featured: false,
   ),
   Product(
@@ -622,7 +630,7 @@ const cafeProducts = <Product>[
     category: "Cookies",
     group: "Pastries",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/OG Chookies 1.png",
+    image: "assets/images/OG Chookies 1.png",
     featured: false,
   ),
   Product(
@@ -632,7 +640,7 @@ const cafeProducts = <Product>[
     category: "Cookies",
     group: "Pastries",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Choco Walnut Cookies 1.png",
+    image: "assets/images/Choco Walnut Cookies 1.png",
     featured: false,
   ),
   Product(
@@ -642,7 +650,7 @@ const cafeProducts = <Product>[
     category: "Cookies",
     group: "Pastries",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Chocotrio Cookies 1.png",
+    image: "assets/images/Chocotrio Cookies 1.png",
     featured: false,
   ),
   Product(
@@ -652,7 +660,7 @@ const cafeProducts = <Product>[
     category: "Cookies",
     group: "Pastries",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Lotus Cookies 1.png",
+    image: "assets/images/Lotus Cookies 1.png",
     featured: false,
   ),
   Product(
@@ -662,7 +670,7 @@ const cafeProducts = <Product>[
     category: "Cookies",
     group: "Pastries",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Velve Cookies 1.png",
+    image: "assets/images/Velve Cookies 1.png",
     featured: false,
   ),
   Product(
@@ -672,7 +680,7 @@ const cafeProducts = <Product>[
     category: "Cookies",
     group: "Pastries",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Hershey's Crinkles 1.png",
+    image: "assets/images/Hershey's Crinkles 1.png",
     featured: false,
   ),
   Product(
@@ -682,7 +690,7 @@ const cafeProducts = <Product>[
     category: "Cookies",
     group: "Pastries",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/4 pcs 1.png",
+    image: "assets/images/4 pcs 1.png",
     featured: false,
   ),
   Product(
@@ -692,7 +700,7 @@ const cafeProducts = <Product>[
     category: "Cookies",
     group: "Pastries",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/9 PCS 1.png",
+    image: "assets/images/9 PCS 1.png",
     featured: false,
   ),
   Product(
@@ -702,7 +710,7 @@ const cafeProducts = <Product>[
     category: "Cookies",
     group: "Pastries",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/16 pcs 1.png",
+    image: "assets/images/16 pcs 1.png",
     featured: false,
   ),
   Product(
@@ -712,7 +720,7 @@ const cafeProducts = <Product>[
     category: "Muffins",
     group: "Pastries",
     description: "A sweet little moment from our muffins selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Choco Chip Muffin 1.png",
+    image: "assets/images/Choco Chip Muffin 1.png",
     featured: false,
   ),
   Product(
@@ -722,7 +730,7 @@ const cafeProducts = <Product>[
     category: "Muffins",
     group: "Pastries",
     description: "A sweet little moment from our muffins selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Dark Choco Muffin 1.png",
+    image: "assets/images/Dark Choco Muffin 1.png",
     featured: false,
   ),
   Product(
@@ -732,7 +740,7 @@ const cafeProducts = <Product>[
     category: "Cakes",
     group: "Pastries",
     description: "A sweet little moment from our cakes selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Moist Chocolate Cake 1.png",
+    image: "assets/images/Moist Chocolate Cake 1.png",
     featured: false,
   ),
   Product(
@@ -742,7 +750,7 @@ const cafeProducts = <Product>[
     category: "Cakes",
     group: "Pastries",
     description: "A sweet little moment from our cakes selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/No Bake Cheesecake 2.png",
+    image: "assets/images/No Bake Cheesecake 2.png",
     featured: false,
   ),
   Product(
@@ -752,7 +760,7 @@ const cafeProducts = <Product>[
     category: "Cakes",
     group: "Pastries",
     description: "A sweet little moment from our cakes selection. Enjoy it with a hot or iced coffee.",
-    image: "SmoochCafe/images/Tiramisu 1.png",
+    image: "assets/images/Tiramisu 1.png",
     featured: false,
   ),
   Product(
@@ -762,7 +770,7 @@ const cafeProducts = <Product>[
     category: "Coffee",
     group: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
-    image: "SmoochCafe/images/Americano 3.png",
+    image: "assets/images/Americano 3.png",
     featured: false,
   ),
   Product(
@@ -772,7 +780,7 @@ const cafeProducts = <Product>[
     category: "Coffee",
     group: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
-    image: "SmoochCafe/images/Latte 5.png",
+    image: "assets/images/Latte 5.png",
     featured: false,
   ),
   Product(
@@ -782,7 +790,7 @@ const cafeProducts = <Product>[
     category: "Coffee",
     group: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
-    image: "SmoochCafe/images/French Vanilla Latte 5.png",
+    image: "assets/images/French Vanilla Latte 5.png",
     featured: false,
   ),
   Product(
@@ -792,7 +800,7 @@ const cafeProducts = <Product>[
     category: "Coffee",
     group: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
-    image: "SmoochCafe/images/Mocha Latte 5.png",
+    image: "assets/images/Mocha Latte 5.png",
     featured: false,
   ),
   Product(
@@ -802,7 +810,7 @@ const cafeProducts = <Product>[
     category: "Coffee",
     group: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
-    image: "SmoochCafe/images/White Mocha Latte 5.png",
+    image: "assets/images/White Mocha Latte 5.png",
     featured: false,
   ),
   Product(
@@ -812,7 +820,7 @@ const cafeProducts = <Product>[
     category: "Coffee",
     group: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
-    image: "SmoochCafe/images/Caramel Macchiato 5.png",
+    image: "assets/images/Caramel Macchiato 5.png",
     featured: false,
   ),
   Product(
@@ -822,7 +830,7 @@ const cafeProducts = <Product>[
     category: "Coffee",
     group: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
-    image: "SmoochCafe/images/Choco Hazelnut Latte 5.png",
+    image: "assets/images/Choco Hazelnut Latte 5.png",
     featured: false,
   ),
   Product(
@@ -832,7 +840,7 @@ const cafeProducts = <Product>[
     category: "Coffee",
     group: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
-    image: "SmoochCafe/images/Creamy Americano 5.png",
+    image: "assets/images/Creamy Americano 5.png",
     featured: false,
   ),
   Product(
@@ -842,7 +850,7 @@ const cafeProducts = <Product>[
     category: "Coffee",
     group: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
-    image: "SmoochCafe/images/Vanilla Ice Cream Latte 5.png",
+    image: "assets/images/Vanilla Ice Cream Latte 5.png",
     featured: false,
   ),
   Product(
@@ -852,7 +860,7 @@ const cafeProducts = <Product>[
     category: "Coffee",
     group: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
-    image: "SmoochCafe/images/Dirty Matcha Latte 5.png",
+    image: "assets/images/Dirty Matcha Latte 5.png",
     featured: false,
   ),
   Product(
@@ -862,7 +870,7 @@ const cafeProducts = <Product>[
     category: "Coffee",
     group: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
-    image: "SmoochCafe/images/Dirty Ube Latte 5.png",
+    image: "assets/images/Dirty Ube Latte 5.png",
     featured: false,
   ),
   Product(
@@ -872,7 +880,7 @@ const cafeProducts = <Product>[
     category: "Non-Coffee",
     group: "Non-Coffee",
     description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
-    image: "SmoochCafe/images/Chocolate 1.png",
+    image: "assets/images/Chocolate 1.png",
     featured: false,
   ),
   Product(
@@ -882,7 +890,7 @@ const cafeProducts = <Product>[
     category: "Non-Coffee",
     group: "Non-Coffee",
     description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
-    image: "SmoochCafe/images/Strawberry Latte 1.png",
+    image: "assets/images/Strawberry Latte 1.png",
     featured: false,
   ),
   Product(
@@ -892,7 +900,7 @@ const cafeProducts = <Product>[
     category: "Non-Coffee",
     group: "Non-Coffee",
     description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
-    image: "SmoochCafe/images/Matcha Latte 1.png",
+    image: "assets/images/Matcha Latte 1.png",
     featured: false,
   ),
   Product(
@@ -902,7 +910,7 @@ const cafeProducts = <Product>[
     category: "Non-Coffee",
     group: "Non-Coffee",
     description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
-    image: "SmoochCafe/images/Ube Latte 1.png",
+    image: "assets/images/Ube Latte 1.png",
     featured: false,
   ),
   Product(
@@ -912,7 +920,7 @@ const cafeProducts = <Product>[
     category: "Non-Coffee",
     group: "Non-Coffee",
     description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
-    image: "SmoochCafe/images/Ube Matcha.png",
+    image: "assets/images/Ube Matcha.png",
     featured: false,
   ),
   Product(
@@ -922,7 +930,7 @@ const cafeProducts = <Product>[
     category: "Ice Blended",
     group: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
-    image: "SmoochCafe/images/Mocha 6.png",
+    image: "assets/images/Mocha 6.png",
     featured: false,
   ),
   Product(
@@ -932,7 +940,7 @@ const cafeProducts = <Product>[
     category: "Ice Blended",
     group: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
-    image: "SmoochCafe/images/White Mocha 6.png",
+    image: "assets/images/White Mocha 6.png",
     featured: false,
   ),
   Product(
@@ -942,7 +950,7 @@ const cafeProducts = <Product>[
     category: "Ice Blended",
     group: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
-    image: "SmoochCafe/images/Caramel Macchiato 7.png",
+    image: "assets/images/Caramel Macchiato 7.png",
     featured: false,
   ),
   Product(
@@ -952,7 +960,7 @@ const cafeProducts = <Product>[
     category: "Ice Blended",
     group: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
-    image: "SmoochCafe/images/Choco Hazelnut 7.png",
+    image: "assets/images/Choco Hazelnut 7.png",
     featured: false,
   ),
   Product(
@@ -962,7 +970,7 @@ const cafeProducts = <Product>[
     category: "Ice Blended",
     group: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
-    image: "SmoochCafe/images/Chocolate 5.png",
+    image: "assets/images/Chocolate 5.png",
     featured: false,
   ),
   Product(
@@ -972,7 +980,7 @@ const cafeProducts = <Product>[
     category: "Ice Blended",
     group: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
-    image: "SmoochCafe/images/Strawberry 6.png",
+    image: "assets/images/Strawberry 6.png",
     featured: false,
   ),
   Product(
@@ -982,7 +990,7 @@ const cafeProducts = <Product>[
     category: "Ice Blended",
     group: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
-    image: "SmoochCafe/images/Matcha 4.png",
+    image: "assets/images/Matcha 4.png",
     featured: false,
   ),
   Product(
@@ -992,7 +1000,7 @@ const cafeProducts = <Product>[
     category: "Ice Blended",
     group: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
-    image: "SmoochCafe/images/Ube 2.png",
+    image: "assets/images/Ube 2.png",
     featured: false,
   ),
   Product(
@@ -1002,7 +1010,7 @@ const cafeProducts = <Product>[
     category: "Lava Series",
     group: "More Drinks",
     description: "A refreshing little break from our lava series selection. A delicious way to complete your order.",
-    image: "SmoochCafe/images/Chocolate Lava 5.png",
+    image: "assets/images/Chocolate Lava 5.png",
     featured: false,
   ),
   Product(
@@ -1012,7 +1020,7 @@ const cafeProducts = <Product>[
     category: "Lava Series",
     group: "More Drinks",
     description: "A refreshing little break from our lava series selection. A delicious way to complete your order.",
-    image: "SmoochCafe/images/Strawberry Lava 5.png",
+    image: "assets/images/Strawberry Lava 5.png",
     featured: false,
   ),
   Product(
@@ -1022,7 +1030,7 @@ const cafeProducts = <Product>[
     category: "Lava Series",
     group: "More Drinks",
     description: "A refreshing little break from our lava series selection. A delicious way to complete your order.",
-    image: "SmoochCafe/images/Ube Lava 5.png",
+    image: "assets/images/Ube Lava 5.png",
     featured: false,
   ),
   Product(
@@ -1032,7 +1040,7 @@ const cafeProducts = <Product>[
     category: "Lava Series",
     group: "More Drinks",
     description: "A refreshing little break from our lava series selection. A delicious way to complete your order.",
-    image: "SmoochCafe/images/Matcha Lava 5.png",
+    image: "assets/images/Matcha Lava 5.png",
     featured: false,
   ),
   Product(
@@ -1042,7 +1050,7 @@ const cafeProducts = <Product>[
     category: "Chilled Drinks",
     group: "More Drinks",
     description: "A refreshing little break from our chilled drinks selection. A delicious way to complete your order.",
-    image: "SmoochCafe/images/Bottled Water 1.png",
+    image: "assets/images/Bottled Water 1.png",
     featured: false,
   ),
   Product(
@@ -1052,7 +1060,7 @@ const cafeProducts = <Product>[
     category: "Chilled Drinks",
     group: "More Drinks",
     description: "A refreshing little break from our chilled drinks selection. A delicious way to complete your order.",
-    image: "SmoochCafe/images/Calamansi juice 1.png",
+    image: "assets/images/Calamansi juice 1.png",
     featured: false,
   ),
   Product(
@@ -1062,7 +1070,7 @@ const cafeProducts = <Product>[
     category: "Chilled Drinks",
     group: "More Drinks",
     description: "A refreshing little break from our chilled drinks selection. A delicious way to complete your order.",
-    image: "SmoochCafe/images/Healthtea 1.png",
+    image: "assets/images/Healthtea 1.png",
     featured: false,
   ),
   Product(
@@ -1072,7 +1080,7 @@ const cafeProducts = <Product>[
     category: "Chilled Drinks",
     group: "More Drinks",
     description: "A refreshing little break from our chilled drinks selection. A delicious way to complete your order.",
-    image: "SmoochCafe/images/Healthea Float 2.png",
+    image: "assets/images/Healthea Float 2.png",
     featured: false,
   ),
   Product(
@@ -1082,7 +1090,7 @@ const cafeProducts = <Product>[
     category: "Dessert",
     group: "More Drinks",
     description: "A refreshing little break from our dessert selection. A delicious way to complete your order.",
-    image: "SmoochCafe/images/Affogato 4.png",
+    image: "assets/images/Affogato 4.png",
     featured: false,
   ),
   Product(
@@ -1092,7 +1100,7 @@ const cafeProducts = <Product>[
     category: "Dessert",
     group: "More Drinks",
     description: "A refreshing little break from our dessert selection. A delicious way to complete your order.",
-    image: "SmoochCafe/images/Matcha Affogato 2.png",
+    image: "assets/images/Matcha Affogato 2.png",
     featured: false,
   ),
 ];
@@ -1269,7 +1277,7 @@ class BrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Image.asset(
-    'SmoochCafe/images/logo.png',
+    'assets/images/logo.png',
     width: width,
     height: width * .56,
     semanticLabel: 'Smooch Cafe',
@@ -1486,7 +1494,7 @@ class _SplashScreenState extends State<SplashScreen>
       if (!mounted) return;
       // Decode the initial menu images while the intro is playing.
       final assets = <String>{
-        'SmoochCafe/images/Ice Blended Choco Hazelnut transparent.png',
+        'assets/images/Ice Blended Choco Hazelnut transparent.png',
         ...widget.controller.products.take(6).map((product) => product.image),
       };
       for (final asset in assets) {
@@ -3266,7 +3274,7 @@ class CafeSection extends StatelessWidget {
             height: 240,
             width: double.infinity,
             child: Image.asset(
-              'SmoochCafe/images/landing1.png',
+              'assets/images/landing1.png',
               fit: BoxFit.contain,
             ),
           ),
