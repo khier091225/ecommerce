@@ -1,0 +1,919 @@
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const MiniShopApp());
+}
+
+// ============================================================
+// FINAL PROJECT STARTER CODE
+// Customize this application based on your chosen e-commerce.
+//
+// IMPORTANT:
+// The required Start Screen is intentionally NOT included.
+// Create your own StartScreen and use Navigator.push() on a
+// button to open HomeScreen.
+//
+// After creating StartScreen, change:
+//   home: const HomeScreen(),
+// to:
+//   home: const StartScreen(),
+// ============================================================
+
+// ============================================================
+// APPLICATION COLORS
+// Customize these colors to match your selected e-commerce.
+// ============================================================
+
+class AppColors {
+  static const Color primary = Color(0xFF1565C0);
+  static const Color background = Color(0xFFF5F7FA);
+  static const Color card = Colors.white;
+  static const Color text = Color(0xFF202124);
+}
+
+// ============================================================
+// PRODUCT MODEL
+// Each product contains a name, price, category,
+// description, and local image path.
+// ============================================================
+
+class Product {
+  final String name;
+  final double price;
+  final String category;
+  final String description;
+  final String image;
+
+  const Product({
+    required this.name,
+    required this.price,
+    required this.category,
+    required this.description,
+    required this.image,
+  });
+}
+
+// ============================================================
+// PRODUCT DATA
+// Replace these products with your own.
+// Add more Product(...) blocks as needed.
+// ============================================================
+
+const List<Product> demoProducts = [
+  Product(
+    name: 'Wireless Headphones',
+    price: 1499,
+    category: 'Electronics',
+    description:
+        'Comfortable wireless headphones with clear audio, '
+        'soft ear cushions, and long battery life.',
+    image: 'assets/images/headphones.jpg',
+  ),
+  Product(
+    name: 'Smart Watch',
+    price: 2999,
+    category: 'Electronics',
+    description:
+        'A lightweight smart watch that displays notifications, '
+        'time, activity information, and basic daily functions.',
+    image: 'assets/images/smartwatch.jpg',
+  ),
+  Product(
+    name: 'Phone Case',
+    price: 399,
+    category: 'Accessories',
+    description:
+        'A protective phone case designed to protect your '
+        'device from scratches and minor impacts.',
+    image: 'assets/images/phone_case.jpg',
+  ),
+  Product(
+    name: 'Laptop Sleeve',
+    price: 799,
+    category: 'Accessories',
+    description:
+        'A padded laptop sleeve suitable for protecting '
+        'your computer while traveling.',
+    image: 'assets/images/laptop_sleeve.jpg',
+  ),
+  Product(
+    name: 'Desk Lamp',
+    price: 899,
+    category: 'Home',
+    description:
+        'A compact desk lamp designed for studying, reading, '
+        'and working at home.',
+    image: 'assets/images/desk_lamp.jpg',
+  ),
+  Product(
+    name: 'Bluetooth Speaker',
+    price: 1199,
+    category: 'Electronics',
+    description:
+        'A portable Bluetooth speaker suitable for music, '
+        'videos, and everyday listening.',
+    image: 'assets/images/speaker.jpg',
+  ),
+];
+
+// ============================================================
+// MAIN APPLICATION
+// ============================================================
+
+class MiniShopApp extends StatelessWidget {
+  const MiniShopApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'MiniShop',
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: AppColors.primary,
+        ),
+      ),
+
+      // FINAL PROJECT:
+      // Change this to StartScreen after creating it.
+      home: const HomeScreen(),
+    );
+  }
+}
+
+// ============================================================
+// HOME SCREEN
+// Contains:
+// - Store name
+// - Cart button and item counter
+// - Search field
+// - Category filters
+// - Product grid
+// ============================================================
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String searchText = '';
+  String selectedCategory = 'All';
+
+  final List<Product> cartItems = [];
+
+  // ==========================================================
+  // CATEGORIES
+  // Add or remove categories here.
+  // Product.category must exactly match one of these values.
+  // ==========================================================
+
+  final List<String> categories = [
+    'All',
+    'Electronics',
+    'Accessories',
+    'Home',
+  ];
+
+  // ==========================================================
+  // FILTER PRODUCTS
+  // ==========================================================
+
+  List<Product> get filteredProducts {
+    return demoProducts.where((product) {
+      final matchesSearch = product.name
+          .toLowerCase()
+          .contains(searchText.toLowerCase());
+
+      final matchesCategory =
+          selectedCategory == 'All' ||
+          product.category == selectedCategory;
+
+      return matchesSearch && matchesCategory;
+    }).toList();
+  }
+
+  // ==========================================================
+  // OPEN PRODUCT DETAILS
+  // ==========================================================
+
+  Future<void> openProduct(Product product) async {
+    final addedProduct = await Navigator.push<Product>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProductDetailsScreen(
+          product: product,
+        ),
+      ),
+    );
+
+    if (addedProduct != null) {
+      setState(() {
+        cartItems.add(addedProduct);
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${addedProduct.name} added to cart.',
+          ),
+        ),
+      );
+    }
+  }
+
+  // ==========================================================
+  // OPEN CART
+  // ==========================================================
+
+  void openCart() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CartScreen(
+          cartItems: cartItems,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+
+        // CUSTOMIZE STORE NAME
+        title: const Text(
+          'MiniShop',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+
+        actions: [
+          Stack(
+            children: [
+              IconButton(
+                onPressed: openCart,
+                icon: const Icon(
+                  Icons.shopping_cart,
+                ),
+              ),
+
+              if (cartItems.isNotEmpty)
+                Positioned(
+                  right: 3,
+                  top: 3,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '${cartItems.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final int columnCount =
+              constraints.maxWidth >= 700 ? 3 : 2;
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // CUSTOMIZE HOME HEADING
+                const Text(
+                  'Find what you need',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.text,
+                  ),
+                ),
+
+                const SizedBox(height: 5),
+
+                const Text(
+                  'Browse our product collection.',
+                  style: TextStyle(
+                    color: Colors.black54,
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // SEARCH FIELD
+                TextField(
+                  onChanged: (value) {
+                    setState(() {
+                      searchText = value;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search products...',
+                    prefixIcon: const Icon(
+                      Icons.search,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                const Text(
+                  'Categories',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // CATEGORY CHIPS
+                SizedBox(
+                  height: 45,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: categories.length,
+                    separatorBuilder: (context, index) {
+                      return const SizedBox(width: 8);
+                    },
+                    itemBuilder: (context, index) {
+                      final category = categories[index];
+
+                      return ChoiceChip(
+                        label: Text(category),
+                        selected:
+                            selectedCategory == category,
+                        onSelected: (selected) {
+                          setState(() {
+                            selectedCategory = category;
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 25),
+
+                Row(
+                  mainAxisAlignment:
+                      MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Products',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      '${filteredProducts.length} items',
+                      style: const TextStyle(
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 15),
+
+                if (filteredProducts.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(
+                      vertical: 50,
+                    ),
+                    child: Center(
+                      child: Text(
+                        'No products found.',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.black54,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  // RESPONSIVE PRODUCT GRID
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics:
+                        const NeverScrollableScrollPhysics(),
+                    itemCount: filteredProducts.length,
+                    gridDelegate:
+                        SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columnCount,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 0.70,
+                    ),
+                    itemBuilder: (context, index) {
+                      final product =
+                          filteredProducts[index];
+
+                      return ProductCard(
+                        product: product,
+                        onTap: () {
+                          openProduct(product);
+                        },
+                      );
+                    },
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ============================================================
+// PRODUCT CARD
+// ============================================================
+
+class ProductCard extends StatelessWidget {
+  final Product product;
+  final VoidCallback onTap;
+
+  const ProductCard({
+    super.key,
+    required this.product,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: AppColors.card,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                color: Colors.grey.shade100,
+                child: Image.asset(
+                  product.image,
+                  fit: BoxFit.cover,
+                  errorBuilder: (
+                    context,
+                    error,
+                    stackTrace,
+                  ) {
+                    return const Center(
+                      child: Icon(
+                        Icons.image_not_supported,
+                        size: 60,
+                        color: Colors.grey,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.name,
+                    maxLines: 1,
+                    overflow:
+                        TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight:
+                          FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  Text(
+                    product.category,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.black54,
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Text(
+                    '₱${product.price.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight:
+                          FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// PRODUCT DETAILS SCREEN
+// ============================================================
+
+class ProductDetailsScreen extends StatelessWidget {
+  final Product product;
+
+  const ProductDetailsScreen({
+    super.key,
+    required this.product,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        title: const Text(
+          'Product Details',
+        ),
+      ),
+
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              height: 280,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius:
+                    BorderRadius.circular(20),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Image.asset(
+                product.image,
+                fit: BoxFit.cover,
+                errorBuilder: (
+                  context,
+                  error,
+                  stackTrace,
+                ) {
+                  return const Center(
+                    child: Icon(
+                      Icons.image_not_supported,
+                      size: 100,
+                      color: Colors.grey,
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 25),
+
+            Text(
+              product.name,
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 7),
+
+            Text(
+              product.category,
+              style: const TextStyle(
+                fontSize: 15,
+                color: Colors.black54,
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            Text(
+              '₱${product.price.toStringAsFixed(2)}',
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
+            ),
+
+            const SizedBox(height: 25),
+
+            const Text(
+              'Description',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            Text(
+              product.description,
+              style: const TextStyle(
+                fontSize: 16,
+                height: 1.6,
+              ),
+            ),
+
+            const SizedBox(height: 35),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(
+                    context,
+                    product,
+                  );
+                },
+                icon: const Icon(
+                  Icons.add_shopping_cart,
+                ),
+                label: const Text(
+                  'ADD TO CART',
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      AppColors.primary,
+                  foregroundColor:
+                      Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(
+                    vertical: 16,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// CART SCREEN
+// ============================================================
+
+class CartScreen extends StatelessWidget {
+  final List<Product> cartItems;
+
+  const CartScreen({
+    super.key,
+    required this.cartItems,
+  });
+
+  double get total {
+    return cartItems.fold(
+      0,
+      (sum, product) =>
+          sum + product.price,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        title: const Text(
+          'My Cart',
+        ),
+      ),
+
+      body: cartItems.isEmpty
+          ? const Center(
+              child: Column(
+                mainAxisAlignment:
+                    MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.shopping_cart_outlined,
+                    size: 90,
+                    color: Colors.grey,
+                  ),
+                  SizedBox(height: 15),
+                  Text(
+                    'Your cart is empty.',
+                    style: TextStyle(
+                      fontSize: 20,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : ListView.separated(
+              padding:
+                  const EdgeInsets.all(16),
+              itemCount: cartItems.length,
+              separatorBuilder:
+                  (context, index) {
+                return const SizedBox(
+                  height: 10,
+                );
+              },
+              itemBuilder:
+                  (context, index) {
+                final product =
+                    cartItems[index];
+
+                return Card(
+                  child: ListTile(
+                    leading: ClipRRect(
+                      borderRadius:
+                          BorderRadius.circular(
+                        8,
+                      ),
+                      child: SizedBox(
+                        width: 55,
+                        height: 55,
+                        child: Image.asset(
+                          product.image,
+                          fit: BoxFit.cover,
+                          errorBuilder: (
+                            context,
+                            error,
+                            stackTrace,
+                          ) {
+                            return const Icon(
+                              Icons.image_not_supported,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+
+                    title: Text(
+                      product.name,
+                    ),
+
+                    subtitle: Text(
+                      product.category,
+                    ),
+
+                    trailing: Text(
+                      '₱${product.price.toStringAsFixed(2)}',
+                      style:
+                          const TextStyle(
+                        fontWeight:
+                            FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+
+      bottomNavigationBar:
+          cartItems.isEmpty
+              ? null
+              : SafeArea(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.all(
+                      16,
+                    ),
+                    decoration:
+                        const BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          blurRadius: 8,
+                          color:
+                              Colors.black12,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize:
+                          MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment
+                                  .spaceBetween,
+                          children: [
+                            const Text(
+                              'Total',
+                              style:
+                                  TextStyle(
+                                fontSize: 18,
+                                fontWeight:
+                                    FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              '₱${total.toStringAsFixed(2)}',
+                              style:
+                                  const TextStyle(
+                                fontSize: 20,
+                                fontWeight:
+                                    FontWeight.bold,
+                                color:
+                                    AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        SizedBox(
+                          width:
+                              double.infinity,
+                          child:
+                              ElevatedButton(
+                            onPressed: () {
+                              ScaffoldMessenger
+                                      .of(context)
+                                  .showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Checkout is for demonstration only.',
+                                  ),
+                                ),
+                              );
+                            },
+                            style:
+                                ElevatedButton
+                                    .styleFrom(
+                              backgroundColor:
+                                  AppColors.primary,
+                              foregroundColor:
+                                  Colors.white,
+                              padding:
+                                  const EdgeInsets
+                                      .symmetric(
+                                vertical: 15,
+                              ),
+                            ),
+                            child: const Text(
+                              'CHECKOUT',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+    );
+  }
+}

@@ -1,0 +1,54 @@
+// Import the supplied website's names, prices, categories, and image paths.
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const root = new URL('../', import.meta.url);
+const imageFiles = new Set(readdirSync(new URL('SmoochCafe/images/', root)));
+const source = readFileSync(new URL('SmoochCafe/pages/products.html', root), 'utf8');
+const decode = (text) => text.replaceAll('&amp;', '&').replaceAll('&#39;', "'").replaceAll('&quot;', '"');
+const cards = source.split(/<div class="product-card" data-name="([^"]+)" data-price="([^"]+)">/);
+const food = ['Quarter Pounder', 'Sandwiches', 'Quesadilla', 'French Fries', 'Fries', 'Rice Bowls', 'Pasta', 'Nachos'];
+const pastry = ['Brownies', 'Cookies', 'Muffins', 'Cakes'];
+const descriptions = {
+  'Tiramisu Latte': 'Espresso-based latte with tiramisu-inspired cream. A little coffee, a little dessert, and a whole lot of comfort.',
+  'Classic Burger': 'A juicy quarter-pound patty with cheese and fresh veggies. Your comfort-food favorite, made to pair with a Smooch drink.',
+  'Chocolate Bliss': 'A fudgy chocolate brownie with a rich, moist center. The perfect little companion to your favorite coffee.',
+  'Spanish Latte': 'Espresso and milk with a sweet, creamy finish. A comforting coffee for slow afternoons.',
+  'Strawberry Matcha': 'Earthy matcha meets sweet strawberry and milk for a colorful sip of happiness.',
+};
+const featured = ['Tiramisu Latte', 'Classic Burger', 'Chocolate Bliss', 'Spanish Latte', 'Strawberry Matcha', 'Basque Cheesecake'];
+const products = [];
+for (let i = 1; i < cards.length; i += 3) {
+  const [name, price, body] = [decode(cards[i]), Number(cards[i + 1]), cards[i + 2]];
+  const image = `SmoochCafe/${decode(body.match(/<img src="([^"]+)"/)[1]).replace('../', '')}`;
+  const category = decode(body.match(/<div class="product-tag">([^<]+)/)[1]).trim();
+  const group = food.includes(category) ? 'Food' : pastry.includes(category) ? 'Pastries' : ['Coffee', 'Non-Coffee', 'Ice Blended'].includes(category) ? category : 'More Drinks';
+  if (!existsSync(new URL(image, root))) throw Error(`Missing image: ${image}`);
+  if (!imageFiles.has(image.slice(image.lastIndexOf('/') + 1))) throw Error(`Image filename case mismatch: ${image}`);
+  const description = descriptions[name] ?? {
+    Food: `A comforting pick from our ${category.toLowerCase()} menu. Pair it with your favorite handcrafted drink.`,
+    Pastries: `A sweet little moment from our ${category.toLowerCase()} selection. Enjoy it with a hot or iced coffee.`,
+    Coffee: 'Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.',
+    'Non-Coffee': 'Skip the espresso and find a little happiness in our non-coffee drink selection.',
+    'Ice Blended': 'A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.',
+    'More Drinks': `A refreshing little break from our ${category.toLowerCase()} selection. A delicious way to complete your order.`,
+  }[group];
+  products.push({ id: `${category}-${name}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), name, price, category, group, description, image, featured: featured.includes(name) });
+}
+products.sort((a, b) => (a.featured ? featured.indexOf(a.name) : 100) - (b.featured ? featured.indexOf(b.name) : 100));
+const dart = (value) => typeof value === 'string' ? JSON.stringify(value).replaceAll('$', '\\$') : String(value);
+const output = ['// BEGIN CAFE CATALOG', '// Generated from SmoochCafe/pages/products.html by tools/import_menu.mjs.', 'const cafeProducts = <Product>[',
+  ...products.map((product) => `  Product(\n${Object.entries(product).map(([key, value]) => `    ${key}: ${dart(value)},`).join('\n')}\n  ),`), '];', '// END CAFE CATALOG'].join('\n');
+const target = new URL('lib/main.dart', root);
+const main = readFileSync(target, 'utf8');
+const startMarker = '// BEGIN CAFE CATALOG';
+const endMarker = '// END CAFE CATALOG';
+const start = main.indexOf(startMarker);
+const end = main.indexOf(endMarker);
+if (start < 0 || end < start || main.indexOf(startMarker, start + 1) !== -1 || main.indexOf(endMarker, end + 1) !== -1) {
+  throw Error('Expected one matching pair of cafe catalog markers in lib/main.dart. No files changed.');
+}
+writeFileSync(target, main.slice(0, start) + output + main.slice(end + endMarker.length));
+console.log(`Imported ${products.length} products; all image paths verified.`);
+console.log('Categories:', [...new Set(products.map((p) => p.category))].join(', '));
+console.log('Catalog section:', fileURLToPath(target));

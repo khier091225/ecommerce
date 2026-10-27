@@ -1,0 +1,3810 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/widget_previews.dart';
+
+// ============================================================
+// SMOOCH CAFE - CUSTOMIZED MINISHOP STARTER
+// ============================================================
+
+// The application stays in this file, following the supplied starter.
+// Customize colors, products, and screens in the sections below.
+// Images and fonts are declared in pubspec.yaml.
+
+void main() {
+  runApp(const MiniShopApp());
+}
+
+// ============================================================
+// APPLICATION COLORS AND THEME
+// ============================================================
+abstract final class AppColors {
+  static const dark = Color(0xFF0A4952);
+  static const teal = Color(0xFF0E6F7A);
+  static const coral = Color(0xFFF04C45);
+  static const white = Color(0xFFFFFFFF);
+  static const muted = Color(0xFFC0D8DA);
+  static const line = Color(0xFF39747C);
+  static const canvas = Color(0xFFF6F3ED);
+  static const surface = Color(0xFFFFFFFF);
+  static const ink = Color(0xFF163B3D);
+  static const secondaryText = Color(0xFF56696B);
+  static const border = Color(0xFFDCE3DF);
+  static const action = Color(0xFFC23F38);
+  static const softTeal = Color(0xFFE8F0EC);
+  static const softCoral = Color(0xFFFBE9E5);
+}
+
+abstract final class AppTheme {
+  static final theme = ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.light,
+    visualDensity: VisualDensity.standard,
+    fontFamily: 'Montserrat',
+    scaffoldBackgroundColor: AppColors.canvas,
+    colorScheme: const ColorScheme.light(
+      primary: AppColors.action,
+      onPrimary: AppColors.white,
+      secondary: AppColors.teal,
+      surface: AppColors.surface,
+      onSurface: AppColors.ink,
+      onSurfaceVariant: AppColors.secondaryText,
+      outline: AppColors.secondaryText,
+      outlineVariant: AppColors.border,
+    ),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: AppColors.dark,
+      foregroundColor: AppColors.white,
+      surfaceTintColor: Colors.transparent,
+      centerTitle: false,
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: AppColors.action,
+        foregroundColor: AppColors.white,
+        minimumSize: const Size(48, 52),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        textStyle: const TextStyle(
+          fontFamily: 'Montserrat',
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.ink,
+        minimumSize: const Size(48, 52),
+        side: const BorderSide(color: AppColors.secondaryText),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: AppColors.surface,
+      hintStyle: const TextStyle(color: AppColors.secondaryText, fontSize: 14),
+      prefixIconColor: AppColors.secondaryText,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: AppColors.secondaryText),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: AppColors.teal, width: 2),
+      ),
+    ),
+    snackBarTheme: const SnackBarThemeData(
+      backgroundColor: AppColors.dark,
+      contentTextStyle: TextStyle(
+        color: AppColors.white,
+        fontFamily: 'Montserrat',
+      ),
+      actionTextColor: AppColors.white,
+      behavior: SnackBarBehavior.floating,
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: AppColors.surface,
+      indicatorColor: AppColors.softTeal,
+      labelTextStyle: const WidgetStatePropertyAll(
+        TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppColors.ink,
+        ),
+      ),
+    ),
+    dividerTheme: const DividerThemeData(color: AppColors.border, thickness: 1),
+  );
+}
+
+TextStyle displayStyle(double size, {Color color = AppColors.ink}) => TextStyle(
+  fontFamily: 'Playfair',
+  fontSize: size,
+  height: 1.12,
+  fontWeight: FontWeight.w600,
+  color: color,
+  letterSpacing: -.8,
+);
+
+// ============================================================
+// PRODUCT AND CART MODELS
+// ============================================================
+@immutable
+class Product {
+  const Product({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.category,
+    required this.group,
+    required this.description,
+    required this.image,
+    this.featured = false,
+  });
+
+  final String id;
+  final String name;
+  final int price;
+  final String category;
+  final String group;
+  final String description;
+  final String image;
+  final bool featured;
+}
+
+@immutable
+class CartItem {
+  const CartItem({required this.product, required this.quantity});
+
+  final Product product;
+  final int quantity;
+  int get total => product.price * quantity;
+}
+
+String pesos(num amount) => '\u20b1${amount.toStringAsFixed(2)}';
+
+// ============================================================
+// PRODUCT DATA
+// ============================================================
+// BEGIN CAFE CATALOG
+// Generated from SmoochCafe/pages/products.html by tools/import_menu.mjs.
+const cafeProducts = <Product>[
+  Product(
+    id: "coffee-tiramisu-latte",
+    name: "Tiramisu Latte",
+    price: 145,
+    category: "Coffee",
+    group: "Coffee",
+    description: "Espresso-based latte with tiramisu-inspired cream. A little coffee, a little dessert, and a whole lot of comfort.",
+    image: "SmoochCafe/images//Tiramisu Latte 5.png",
+    featured: true,
+  ),
+  Product(
+    id: "quarter-pounder-classic-burger",
+    name: "Classic Burger",
+    price: 110,
+    category: "Quarter Pounder",
+    group: "Food",
+    description: "A juicy quarter-pound patty with cheese and fresh veggies. Your comfort-food favorite, made to pair with a Smooch drink.",
+    image: "SmoochCafe/images/Classic Burger.png",
+    featured: true,
+  ),
+  Product(
+    id: "brownies-chocolate-bliss",
+    name: "Chocolate Bliss",
+    price: 145,
+    category: "Brownies",
+    group: "Pastries",
+    description: "A fudgy chocolate brownie with a rich, moist center. The perfect little companion to your favorite coffee.",
+    image: "SmoochCafe/images/Chocolate Bliss 2.png",
+    featured: true,
+  ),
+  Product(
+    id: "coffee-spanish-latte",
+    name: "Spanish Latte",
+    price: 80,
+    category: "Coffee",
+    group: "Coffee",
+    description: "Espresso and milk with a sweet, creamy finish. A comforting coffee for slow afternoons.",
+    image: "SmoochCafe/images/Spanish Latte 5.png",
+    featured: true,
+  ),
+  Product(
+    id: "non-coffee-strawberry-matcha",
+    name: "Strawberry Matcha",
+    price: 115,
+    category: "Non-Coffee",
+    group: "Non-Coffee",
+    description: "Earthy matcha meets sweet strawberry and milk for a colorful sip of happiness.",
+    image: "SmoochCafe/images/Strawberry Matcha 1.png",
+    featured: true,
+  ),
+  Product(
+    id: "cakes-basque-cheesecake",
+    name: "Basque Cheesecake",
+    price: 190,
+    category: "Cakes",
+    group: "Pastries",
+    description: "A sweet little moment from our cakes selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Basque Cheesecake 1.png",
+    featured: true,
+  ),
+  Product(
+    id: "quarter-pounder-hawaiian-burger",
+    name: "Hawaiian Burger",
+    price: 125,
+    category: "Quarter Pounder",
+    group: "Food",
+    description: "A comforting pick from our quarter pounder menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Hawaiian Burger.png",
+    featured: false,
+  ),
+  Product(
+    id: "quarter-pounder-sunrise-burger",
+    name: "Sunrise Burger",
+    price: 150,
+    category: "Quarter Pounder",
+    group: "Food",
+    description: "A comforting pick from our quarter pounder menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Sunrise Burger.png",
+    featured: false,
+  ),
+  Product(
+    id: "quarter-pounder-bacon-cheese-burger",
+    name: "Bacon Cheese Burger",
+    price: 155,
+    category: "Quarter Pounder",
+    group: "Food",
+    description: "A comforting pick from our quarter pounder menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Bacon Cheese Burger.png",
+    featured: false,
+  ),
+  Product(
+    id: "quarter-pounder-double-classic-burger",
+    name: "Double Classic Burger",
+    price: 180,
+    category: "Quarter Pounder",
+    group: "Food",
+    description: "A comforting pick from our quarter pounder menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Double Classic Burger.png",
+    featured: false,
+  ),
+  Product(
+    id: "sandwiches-classic-chicken",
+    name: "Classic Chicken",
+    price: 110,
+    category: "Sandwiches",
+    group: "Food",
+    description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Classic Chicken Sandwich.png",
+    featured: false,
+  ),
+  Product(
+    id: "sandwiches-club-house",
+    name: "Club House",
+    price: 185,
+    category: "Sandwiches",
+    group: "Food",
+    description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Club House Sandwich.png",
+    featured: false,
+  ),
+  Product(
+    id: "sandwiches-grilled-cheese",
+    name: "Grilled Cheese",
+    price: 110,
+    category: "Sandwiches",
+    group: "Food",
+    description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Grilled Cheese Sandwich.png",
+    featured: false,
+  ),
+  Product(
+    id: "sandwiches-grilled-ham-cheese",
+    name: "Grilled Ham & Cheese",
+    price: 100,
+    category: "Sandwiches",
+    group: "Food",
+    description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Grilled Ham & Cheese Sandwich.png",
+    featured: false,
+  ),
+  Product(
+    id: "sandwiches-tuna-sandwich",
+    name: "Tuna Sandwich",
+    price: 125,
+    category: "Sandwiches",
+    group: "Food",
+    description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Tuna Sandwich.png",
+    featured: false,
+  ),
+  Product(
+    id: "sandwiches-chicken-sandwich",
+    name: "Chicken Sandwich",
+    price: 130,
+    category: "Sandwiches",
+    group: "Food",
+    description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Chicken Sandwich.png",
+    featured: false,
+  ),
+  Product(
+    id: "quesadilla-cheese-quesadilla",
+    name: "Cheese Quesadilla",
+    price: 115,
+    category: "Quesadilla",
+    group: "Food",
+    description: "A comforting pick from our quesadilla menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Cheese Quesadilla.png",
+    featured: false,
+  ),
+  Product(
+    id: "quesadilla-bacon-quesadilla",
+    name: "Bacon Quesadilla",
+    price: 145,
+    category: "Quesadilla",
+    group: "Food",
+    description: "A comforting pick from our quesadilla menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Bacon Quesadilla.png",
+    featured: false,
+  ),
+  Product(
+    id: "quesadilla-chicken-quesadilla",
+    name: "Chicken Quesadilla",
+    price: 150,
+    category: "Quesadilla",
+    group: "Food",
+    description: "A comforting pick from our quesadilla menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Chicken Quesadilla.png",
+    featured: false,
+  ),
+  Product(
+    id: "quesadilla-tapa-quesadilla",
+    name: "Tapa Quesadilla",
+    price: 160,
+    category: "Quesadilla",
+    group: "Food",
+    description: "A comforting pick from our quesadilla menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Tapa Quesadilla.png",
+    featured: false,
+  ),
+  Product(
+    id: "french-fries-plain-fries",
+    name: "Plain Fries",
+    price: 30,
+    category: "French Fries",
+    group: "Food",
+    description: "A comforting pick from our french fries menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Plain Fries.png",
+    featured: false,
+  ),
+  Product(
+    id: "french-fries-bbq-fries",
+    name: "BBQ Fries",
+    price: 30,
+    category: "French Fries",
+    group: "Food",
+    description: "A comforting pick from our french fries menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/BBQ Fries.png",
+    featured: false,
+  ),
+  Product(
+    id: "french-fries-cheese-fries",
+    name: "Cheese Fries",
+    price: 30,
+    category: "French Fries",
+    group: "Food",
+    description: "A comforting pick from our french fries menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Cheese Fries.png",
+    featured: false,
+  ),
+  Product(
+    id: "french-fries-sour-cream-fries",
+    name: "Sour Cream Fries",
+    price: 30,
+    category: "French Fries",
+    group: "Food",
+    description: "A comforting pick from our french fries menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Sour Cream Fries.png",
+    featured: false,
+  ),
+  Product(
+    id: "rice-bowls-longganisa",
+    name: "Longganisa",
+    price: 110,
+    category: "Rice Bowls",
+    group: "Food",
+    description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Longanisa Rice Bowl.png",
+    featured: false,
+  ),
+  Product(
+    id: "rice-bowls-bacon",
+    name: "Bacon",
+    price: 115,
+    category: "Rice Bowls",
+    group: "Food",
+    description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Bacon Rice Bowl.png",
+    featured: false,
+  ),
+  Product(
+    id: "rice-bowls-sisig",
+    name: "Sisig",
+    price: 130,
+    category: "Rice Bowls",
+    group: "Food",
+    description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Sisig Rice Bowl.png",
+    featured: false,
+  ),
+  Product(
+    id: "rice-bowls-chicken-steak",
+    name: "Chicken Steak",
+    price: 130,
+    category: "Rice Bowls",
+    group: "Food",
+    description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Chicken Steak Rice Bowl.png",
+    featured: false,
+  ),
+  Product(
+    id: "rice-bowls-burger-steak",
+    name: "Burger Steak",
+    price: 130,
+    category: "Rice Bowls",
+    group: "Food",
+    description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Burger Steak Rice Bowl .png",
+    featured: false,
+  ),
+  Product(
+    id: "rice-bowls-beef-tapa",
+    name: "Beef Tapa",
+    price: 140,
+    category: "Rice Bowls",
+    group: "Food",
+    description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Beef Tapa Rice Bowl.png",
+    featured: false,
+  ),
+  Product(
+    id: "rice-bowls-savory-tapa",
+    name: "Savory Tapa",
+    price: 145,
+    category: "Rice Bowls",
+    group: "Food",
+    description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Savory Tapa Rice Bowl.png",
+    featured: false,
+  ),
+  Product(
+    id: "rice-bowls-chicken-bbq",
+    name: "Chicken BBQ",
+    price: 125,
+    category: "Rice Bowls",
+    group: "Food",
+    description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Chicken BBQ Rice Bowl.png",
+    featured: false,
+  ),
+  Product(
+    id: "rice-bowls-chicken-teriyaki",
+    name: "Chicken Teriyaki",
+    price: 125,
+    category: "Rice Bowls",
+    group: "Food",
+    description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Chicken Teriyaki Rice Bowl.png",
+    featured: false,
+  ),
+  Product(
+    id: "pasta-lasagna",
+    name: "Lasagna",
+    price: 130,
+    category: "Pasta",
+    group: "Food",
+    description: "A comforting pick from our pasta menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Lasagana 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "pasta-carbonara",
+    name: "Carbonara",
+    price: 115,
+    category: "Pasta",
+    group: "Food",
+    description: "A comforting pick from our pasta menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Carbonara 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "pasta-spaghetti-bolognese",
+    name: "Spaghetti Bolognese",
+    price: 115,
+    category: "Pasta",
+    group: "Food",
+    description: "A comforting pick from our pasta menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Spaghetti Bolognese 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "nachos-beef-nachos",
+    name: "Beef Nachos",
+    price: 130,
+    category: "Nachos",
+    group: "Food",
+    description: "A comforting pick from our nachos menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Beef Nachos 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "nachos-nacho-fries",
+    name: "Nacho Fries",
+    price: 155,
+    category: "Nachos",
+    group: "Food",
+    description: "A comforting pick from our nachos menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Nacho Fries 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "nachos-cheesy-bacon-fries",
+    name: "Cheesy Bacon Fries",
+    price: 155,
+    category: "Nachos",
+    group: "Food",
+    description: "A comforting pick from our nachos menu. Pair it with your favorite handcrafted drink.",
+    image: "SmoochCafe/images/Cheesy Bacon Fries 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "brownies-caramel-treat",
+    name: "Caramel Treat",
+    price: 54,
+    category: "Brownies",
+    group: "Pastries",
+    description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Caramel Treat 2.png",
+    featured: false,
+  ),
+  Product(
+    id: "brownies-brookies",
+    name: "Brookies",
+    price: 56,
+    category: "Brownies",
+    group: "Pastries",
+    description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Brookies 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "brownies-revel-bar",
+    name: "Revel Bar",
+    price: 60,
+    category: "Brownies",
+    group: "Pastries",
+    description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Revel Bar 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "brownies-velvet-swirl-bar",
+    name: "Velvet Swirl Bar",
+    price: 88,
+    category: "Brownies",
+    group: "Pastries",
+    description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Velvet Swirl Bar 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "brownies-biscoff-blondies",
+    name: "Biscoff Blondies",
+    price: 50,
+    category: "Brownies",
+    group: "Pastries",
+    description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Biscoff Blandies 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "cookies-og-cookies",
+    name: "OG Cookies",
+    price: 40,
+    category: "Cookies",
+    group: "Pastries",
+    description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/OG Chookies 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "cookies-choco-walnut-cookies",
+    name: "Choco Walnut Cookies",
+    price: 45,
+    category: "Cookies",
+    group: "Pastries",
+    description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Choco Walnut Cookies 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "cookies-chocotrio-cookies",
+    name: "Chocotrio Cookies",
+    price: 48,
+    category: "Cookies",
+    group: "Pastries",
+    description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Chocotrio Cookies 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "cookies-lotus-cookies",
+    name: "Lotus Cookies",
+    price: 60,
+    category: "Cookies",
+    group: "Pastries",
+    description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Lotus Cookies 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "cookies-velvet-cookies",
+    name: "Velvet Cookies",
+    price: 60,
+    category: "Cookies",
+    group: "Pastries",
+    description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Velve Cookies 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "cookies-hershey-s-crinkles",
+    name: "Hershey's Crinkles",
+    price: 45,
+    category: "Cookies",
+    group: "Pastries",
+    description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Hershey's Crinkles 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "cookies-mini-cookies-4pcs",
+    name: "Mini Cookies 4pcs",
+    price: 35,
+    category: "Cookies",
+    group: "Pastries",
+    description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/4 pcs 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "cookies-mini-cookies-9pcs",
+    name: "Mini Cookies 9pcs",
+    price: 75,
+    category: "Cookies",
+    group: "Pastries",
+    description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/9 PCS 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "cookies-mini-cookies-16pcs",
+    name: "Mini Cookies 16pcs",
+    price: 130,
+    category: "Cookies",
+    group: "Pastries",
+    description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/16 pcs 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "muffins-choco-chip-muffin",
+    name: "Choco Chip Muffin",
+    price: 75,
+    category: "Muffins",
+    group: "Pastries",
+    description: "A sweet little moment from our muffins selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Choco Chip Muffin 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "muffins-dark-choco-muffin",
+    name: "Dark Choco Muffin",
+    price: 75,
+    category: "Muffins",
+    group: "Pastries",
+    description: "A sweet little moment from our muffins selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Dark Choco Muffin 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "cakes-moist-chocolate-cake",
+    name: "Moist Chocolate Cake",
+    price: 100,
+    category: "Cakes",
+    group: "Pastries",
+    description: "A sweet little moment from our cakes selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Moist Chocolate Cake 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "cakes-no-bake-cheesecake",
+    name: "No Bake Cheesecake",
+    price: 170,
+    category: "Cakes",
+    group: "Pastries",
+    description: "A sweet little moment from our cakes selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/No Bake Cheesecake 2.png",
+    featured: false,
+  ),
+  Product(
+    id: "cakes-tiramisu",
+    name: "Tiramisu",
+    price: 180,
+    category: "Cakes",
+    group: "Pastries",
+    description: "A sweet little moment from our cakes selection. Enjoy it with a hot or iced coffee.",
+    image: "SmoochCafe/images/Tiramisu 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "coffee-americano",
+    name: "Americano",
+    price: 60,
+    category: "Coffee",
+    group: "Coffee",
+    description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
+    image: "SmoochCafe/images/Americano 3.png",
+    featured: false,
+  ),
+  Product(
+    id: "coffee-latte",
+    name: "Latte",
+    price: 70,
+    category: "Coffee",
+    group: "Coffee",
+    description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
+    image: "SmoochCafe/images/Latte 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "coffee-french-vanilla-latte",
+    name: "French Vanilla Latte",
+    price: 75,
+    category: "Coffee",
+    group: "Coffee",
+    description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
+    image: "SmoochCafe/images/French Vanilla Latte 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "coffee-mocha-latte",
+    name: "Mocha Latte",
+    price: 100,
+    category: "Coffee",
+    group: "Coffee",
+    description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
+    image: "SmoochCafe/images/Mocha Latte 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "coffee-white-mocha-latte",
+    name: "White Mocha Latte",
+    price: 90,
+    category: "Coffee",
+    group: "Coffee",
+    description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
+    image: "SmoochCafe/images/White Mocha Latte 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "coffee-caramel-macchiato",
+    name: "Caramel Macchiato",
+    price: 95,
+    category: "Coffee",
+    group: "Coffee",
+    description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
+    image: "SmoochCafe/images/Caramel Macchiato 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "coffee-choco-hazelnut-latte",
+    name: "Choco Hazelnut Latte",
+    price: 95,
+    category: "Coffee",
+    group: "Coffee",
+    description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
+    image: "SmoochCafe/images/Choco Hazelnut Latte 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "coffee-creamy-americano",
+    name: "Creamy Americano",
+    price: 95,
+    category: "Coffee",
+    group: "Coffee",
+    description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
+    image: "SmoochCafe/images/Creamy Americano 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "coffee-vanilla-ice-cream-latte",
+    name: "Vanilla Ice Cream Latte",
+    price: 100,
+    category: "Coffee",
+    group: "Coffee",
+    description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
+    image: "SmoochCafe/images/Vanilla Ice Cream Latte 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "coffee-dirty-matcha-latte",
+    name: "Dirty Matcha Latte",
+    price: 115,
+    category: "Coffee",
+    group: "Coffee",
+    description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
+    image: "SmoochCafe/images/Dirty Matcha Latte 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "coffee-dirty-ube-latte",
+    name: "Dirty Ube Latte",
+    price: 85,
+    category: "Coffee",
+    group: "Coffee",
+    description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
+    image: "SmoochCafe/images/Dirty Ube Latte 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "non-coffee-chocolate",
+    name: "Chocolate",
+    price: 195,
+    category: "Non-Coffee",
+    group: "Non-Coffee",
+    description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
+    image: "SmoochCafe/images/Chocolate 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "non-coffee-strawberry-latte",
+    name: "Strawberry Latte",
+    price: 85,
+    category: "Non-Coffee",
+    group: "Non-Coffee",
+    description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
+    image: "SmoochCafe/images/Strawberry Latte 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "non-coffee-matcha-latte",
+    name: "Matcha Latte",
+    price: 105,
+    category: "Non-Coffee",
+    group: "Non-Coffee",
+    description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
+    image: "SmoochCafe/images/Matcha Latte 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "non-coffee-ube-latte",
+    name: "Ube Latte",
+    price: 75,
+    category: "Non-Coffee",
+    group: "Non-Coffee",
+    description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
+    image: "SmoochCafe/images/Ube Latte 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "non-coffee-ube-matcha",
+    name: "Ube Matcha",
+    price: 105,
+    category: "Non-Coffee",
+    group: "Non-Coffee",
+    description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
+    image: "SmoochCafe/images/Ube Matcha.png",
+    featured: false,
+  ),
+  Product(
+    id: "ice-blended-mocha",
+    name: "Mocha",
+    price: 125,
+    category: "Ice Blended",
+    group: "Ice Blended",
+    description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
+    image: "SmoochCafe/images/Mocha 6.png",
+    featured: false,
+  ),
+  Product(
+    id: "ice-blended-white-mocha",
+    name: "White Mocha",
+    price: 115,
+    category: "Ice Blended",
+    group: "Ice Blended",
+    description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
+    image: "SmoochCafe/images/White Mocha 6.png",
+    featured: false,
+  ),
+  Product(
+    id: "ice-blended-caramel-macchiato",
+    name: "Caramel Macchiato",
+    price: 120,
+    category: "Ice Blended",
+    group: "Ice Blended",
+    description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
+    image: "SmoochCafe/images/Caramel Macchiato 7.png",
+    featured: false,
+  ),
+  Product(
+    id: "ice-blended-choco-hazelnut",
+    name: "Choco Hazelnut",
+    price: 135,
+    category: "Ice Blended",
+    group: "Ice Blended",
+    description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
+    image: "SmoochCafe/images/Choco Hazelnut 7.png",
+    featured: false,
+  ),
+  Product(
+    id: "ice-blended-chocolate",
+    name: "Chocolate",
+    price: 125,
+    category: "Ice Blended",
+    group: "Ice Blended",
+    description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
+    image: "SmoochCafe/images/Chocolate 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "ice-blended-strawberry",
+    name: "Strawberry",
+    price: 110,
+    category: "Ice Blended",
+    group: "Ice Blended",
+    description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
+    image: "SmoochCafe/images/Strawberry 6.png",
+    featured: false,
+  ),
+  Product(
+    id: "ice-blended-matcha",
+    name: "Matcha",
+    price: 115,
+    category: "Ice Blended",
+    group: "Ice Blended",
+    description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
+    image: "SmoochCafe/images/Matcha 4.png",
+    featured: false,
+  ),
+  Product(
+    id: "ice-blended-ube",
+    name: "Ube",
+    price: 100,
+    category: "Ice Blended",
+    group: "Ice Blended",
+    description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
+    image: "SmoochCafe/images/Ube 2.png",
+    featured: false,
+  ),
+  Product(
+    id: "lava-series-chocolate-lava",
+    name: "Chocolate Lava",
+    price: 110,
+    category: "Lava Series",
+    group: "More Drinks",
+    description: "A refreshing little break from our lava series selection. A delicious way to complete your order.",
+    image: "SmoochCafe/images/Chocolate Lava 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "lava-series-strawberry-lava",
+    name: "Strawberry Lava",
+    price: 135,
+    category: "Lava Series",
+    group: "More Drinks",
+    description: "A refreshing little break from our lava series selection. A delicious way to complete your order.",
+    image: "SmoochCafe/images/Strawberry Lava 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "lava-series-ube-lava",
+    name: "Ube Lava",
+    price: 125,
+    category: "Lava Series",
+    group: "More Drinks",
+    description: "A refreshing little break from our lava series selection. A delicious way to complete your order.",
+    image: "SmoochCafe/images/Ube Lava 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "lava-series-matcha-lava",
+    name: "Matcha Lava",
+    price: 155,
+    category: "Lava Series",
+    group: "More Drinks",
+    description: "A refreshing little break from our lava series selection. A delicious way to complete your order.",
+    image: "SmoochCafe/images/Matcha Lava 5.png",
+    featured: false,
+  ),
+  Product(
+    id: "chilled-drinks-bottled-water",
+    name: "Bottled Water",
+    price: 12,
+    category: "Chilled Drinks",
+    group: "More Drinks",
+    description: "A refreshing little break from our chilled drinks selection. A delicious way to complete your order.",
+    image: "SmoochCafe/images/Bottled Water 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "chilled-drinks-calamansi-juice",
+    name: "Calamansi Juice",
+    price: 38,
+    category: "Chilled Drinks",
+    group: "More Drinks",
+    description: "A refreshing little break from our chilled drinks selection. A delicious way to complete your order.",
+    image: "SmoochCafe/images/Calamansi juice 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "chilled-drinks-healthtea",
+    name: "Healthtea",
+    price: 15,
+    category: "Chilled Drinks",
+    group: "More Drinks",
+    description: "A refreshing little break from our chilled drinks selection. A delicious way to complete your order.",
+    image: "SmoochCafe/images/Healthtea 1.png",
+    featured: false,
+  ),
+  Product(
+    id: "chilled-drinks-healthtea-float",
+    name: "Healthtea Float",
+    price: 55,
+    category: "Chilled Drinks",
+    group: "More Drinks",
+    description: "A refreshing little break from our chilled drinks selection. A delicious way to complete your order.",
+    image: "SmoochCafe/images/Healthea Float 2.png",
+    featured: false,
+  ),
+  Product(
+    id: "dessert-affogato",
+    name: "Affogato",
+    price: 65,
+    category: "Dessert",
+    group: "More Drinks",
+    description: "A refreshing little break from our dessert selection. A delicious way to complete your order.",
+    image: "SmoochCafe/images/Affogato 4.png",
+    featured: false,
+  ),
+  Product(
+    id: "dessert-matcha-affogato",
+    name: "Matcha Affogato",
+    price: 85,
+    category: "Dessert",
+    group: "More Drinks",
+    description: "A refreshing little break from our dessert selection. A delicious way to complete your order.",
+    image: "SmoochCafe/images/Matcha Affogato 2.png",
+    featured: false,
+  ),
+];
+// END CAFE CATALOG
+
+// ============================================================
+// LOCAL MENU DATA
+// ============================================================
+class MenuRepository {
+  const MenuRepository();
+
+  List<Product> get products => cafeProducts;
+}
+
+// ============================================================
+// SEARCH, CATEGORY FILTERS, FAVORITES, AND CART STATE
+// ============================================================
+enum MenuSort {
+  recommended('Cafe picks'),
+  priceLow('Price: low to high'),
+  priceHigh('Price: high to low'),
+  name('Name: A–Z');
+
+  const MenuSort(this.label);
+  final String label;
+}
+
+class ShopController extends ChangeNotifier {
+  ShopController({required this.repository});
+
+  final MenuRepository repository;
+  final Map<String, CartItem> _cart = {};
+  final Set<String> _favorites = {};
+  String _query = '';
+  String _category = 'All';
+  MenuSort _sort = MenuSort.recommended;
+
+  static const categories = [
+    'All',
+    'Coffee',
+    'Non-Coffee',
+    'Food',
+    'Pastries',
+    'Ice Blended',
+    'More Drinks',
+  ];
+
+  String get query => _query;
+  String get category => _category;
+  MenuSort get sort => _sort;
+  List<Product> get products => repository.products;
+  List<Product> get filteredProducts {
+    final matches = products.where((product) {
+      final matchesCategory = _category == 'All' || product.group == _category;
+      return matchesCategory && _matchesQuery(product);
+    }).toList();
+    switch (_sort) {
+      case MenuSort.recommended:
+        break;
+      case MenuSort.priceLow:
+        matches.sort((a, b) => a.price.compareTo(b.price));
+      case MenuSort.priceHigh:
+        matches.sort((a, b) => b.price.compareTo(a.price));
+      case MenuSort.name:
+        matches.sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
+    }
+    return matches;
+  }
+
+  bool _matchesQuery(Product product) {
+    final text = '${product.name} ${product.category} ${product.group}'
+        .toLowerCase();
+    final words = _query.trim().toLowerCase().split(RegExp(r'\s+'));
+    return words.every(text.contains);
+  }
+
+  int quantityOf(Product product) => _cart[product.id]?.quantity ?? 0;
+
+  void sortBy(MenuSort value) {
+    _sort = value;
+    notifyListeners();
+  }
+
+  List<Product> get favorites =>
+      products.where(isFavorite).toList(growable: false);
+  List<CartItem> get cartItems => List.unmodifiable(_cart.values);
+  int get cartCount => _cart.values.fold(0, (sum, item) => sum + item.quantity);
+  int get total => _cart.values.fold(0, (sum, item) => sum + item.total);
+
+  void search(String value) {
+    _query = value;
+    notifyListeners();
+  }
+
+  void selectCategory(String value) {
+    _category = value;
+    notifyListeners();
+  }
+
+  bool isFavorite(Product product) => _favorites.contains(product.id);
+
+  void toggleFavorite(Product product) {
+    if (!_favorites.remove(product.id)) _favorites.add(product.id);
+    notifyListeners();
+  }
+
+  void addToCart(Product product, {int quantity = 1}) {
+    if (quantity < 1) return;
+    final previous = _cart[product.id]?.quantity ?? 0;
+    _cart[product.id] = CartItem(
+      product: product,
+      quantity: previous + quantity,
+    );
+    notifyListeners();
+  }
+
+  void decrease(Product product) {
+    final current = _cart[product.id];
+    if (current == null) return;
+    if (current.quantity == 1) {
+      _cart.remove(product.id);
+    } else {
+      _cart[product.id] = CartItem(
+        product: product,
+        quantity: current.quantity - 1,
+      );
+    }
+    notifyListeners();
+  }
+
+  void remove(Product product) {
+    _cart.remove(product.id);
+    notifyListeners();
+  }
+}
+
+// ============================================================
+// MAIN APPLICATION
+// ============================================================
+
+class MiniShopApp extends StatefulWidget {
+  const MiniShopApp({super.key});
+
+  @override
+  State<MiniShopApp> createState() => _MiniShopAppState();
+}
+
+class _MiniShopAppState extends State<MiniShopApp> {
+  final controller = ShopController(repository: const MenuRepository());
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Smooch Cafe',
+    debugShowCheckedModeBanner: false,
+    theme: AppTheme.theme,
+    home: SplashScreen(controller: controller),
+  );
+}
+
+// ============================================================
+// SHARED WIDGETS
+// ============================================================
+class BrandLogo extends StatelessWidget {
+  const BrandLogo({super.key, this.width = 125});
+  final double width;
+
+  @override
+  Widget build(BuildContext context) => Image.asset(
+    'SmoochCafe/images/logo.png',
+    width: width,
+    height: width * .56,
+    semanticLabel: 'Smooch Cafe',
+    fit: BoxFit.contain,
+  );
+}
+
+class ContentWidth extends StatelessWidget {
+  const ContentWidth({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.symmetric(horizontal: 24),
+  });
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    heightFactor: 1,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 1160),
+      child: SizedBox(
+        width: double.infinity,
+        child: Padding(padding: padding, child: child),
+      ),
+    ),
+  );
+}
+
+class Eyebrow extends StatelessWidget {
+  const Eyebrow(this.text, {super.key, this.color = AppColors.secondaryText});
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text.toUpperCase(),
+    style: TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1.4,
+      color: color,
+    ),
+  );
+}
+
+class ProductImage extends StatelessWidget {
+  const ProductImage({
+    super.key,
+    required this.product,
+    this.fit = BoxFit.cover,
+  });
+  final Product product;
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context) => Image.asset(
+    product.image,
+    fit: fit,
+    semanticLabel: product.name,
+    errorBuilder: (context, error, trace) => const ColoredBox(
+      color: AppColors.softTeal,
+      child: Center(
+        child: Icon(Icons.coffee_outlined, size: 48, color: AppColors.teal),
+      ),
+    ),
+  );
+}
+
+class CartButton extends StatelessWidget {
+  const CartButton({
+    super.key,
+    required this.controller,
+    required this.onPressed,
+  });
+  final ShopController controller;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) => IconButton(
+      tooltip: 'View cart',
+      onPressed: onPressed,
+      icon: Badge(
+        isLabelVisible: controller.cartCount > 0,
+        backgroundColor: AppColors.action,
+        label: Text('${controller.cartCount}'),
+        child: const Icon(Icons.shopping_bag_outlined, color: AppColors.white),
+      ),
+    ),
+  );
+}
+
+class QuantityPicker extends StatelessWidget {
+  const QuantityPicker({
+    super.key,
+    required this.quantity,
+    required this.onDecrease,
+    required this.onIncrease,
+  });
+  final int quantity;
+  final VoidCallback? onDecrease;
+  final VoidCallback onIncrease;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      border: Border.all(color: AppColors.border),
+      borderRadius: BorderRadius.circular(28),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: 'Decrease quantity',
+          onPressed: onDecrease,
+          icon: const Icon(Icons.remove, size: 18),
+        ),
+        SizedBox(
+          width: 28,
+          child: Text(
+            '$quantity',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Increase quantity',
+          onPressed: onIncrease,
+          icon: const Icon(Icons.add, size: 18),
+        ),
+      ],
+    ),
+  );
+}
+
+class EmptyState extends StatelessWidget {
+  const EmptyState({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.action,
+  });
+  final IconData icon;
+  final String title;
+  final String message;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 48, color: AppColors.teal),
+        const SizedBox(height: 20),
+        Text(title, style: displayStyle(28), textAlign: TextAlign.center),
+        const SizedBox(height: 12),
+        Text(
+          message,
+          style: const TextStyle(color: AppColors.secondaryText, height: 1.7),
+          textAlign: TextAlign.center,
+        ),
+        if (action != null) ...[const SizedBox(height: 24), action!],
+      ],
+    ),
+  );
+}
+
+// ============================================================
+// 3D SPLASH SCREEN AND MENU TRANSITION
+// ============================================================
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({
+    super.key,
+    required this.controller,
+    this.autoNavigate = true,
+  });
+
+  final ShopController controller;
+  final bool autoNavigate;
+  static const duration = Duration(milliseconds: 4600);
+  static const transitionDuration = Duration(milliseconds: 1100);
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _animation;
+  Timer? _reducedMotionTimer;
+  bool? _reducedMotion;
+  bool _leaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _animation =
+        AnimationController(
+          vsync: this,
+          duration: SplashScreen.duration,
+          animationBehavior: AnimationBehavior.preserve,
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.completed &&
+              _reducedMotion == false &&
+              widget.autoNavigate) {
+            _openMenu();
+          }
+        });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Decode the initial menu images while the intro is playing.
+      final assets = <String>{
+        'SmoochCafe/images/Ice Blended Choco Hazelnut transparent.png',
+        ...widget.controller.products.take(6).map((product) => product.image),
+      };
+      for (final asset in assets) {
+        unawaited(precacheImage(AssetImage(asset), context));
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (_reducedMotion == reduceMotion || _leaving) return;
+    _reducedMotion = reduceMotion;
+    _reducedMotionTimer?.cancel();
+    if (reduceMotion) {
+      _animation.stop();
+      _animation.value = 1;
+      if (widget.autoNavigate) {
+        _reducedMotionTimer = Timer(
+          const Duration(milliseconds: 700),
+          _openMenu,
+        );
+      }
+    } else {
+      _animation.forward(from: 0);
+    }
+  }
+
+  void _openMenu() {
+    if (!mounted || _leaving) return;
+    _leaving = true;
+    _reducedMotionTimer?.cancel();
+    _animation.stop();
+    Navigator.of(context).pushReplacement<void, void>(
+      PageRouteBuilder<void>(
+        transitionDuration: _reducedMotion == true
+            ? Duration.zero
+            : SplashScreen.transitionDuration,
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            MenuScreen(controller: widget.controller),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          if (_reducedMotion == true) return child;
+          return _MenuTransition(animation: animation, child: child);
+        },
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _reducedMotionTimer?.cancel();
+    _animation.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AppColors.dark,
+    body: DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(0, -.15),
+          radius: .85,
+          colors: [AppColors.teal, AppColors.dark, Color(0xFF062E35)],
+          stops: [0, .57, 1],
+        ),
+      ),
+      child: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxHeight < 700;
+            final sceneHeight = (constraints.maxHeight * .43).clamp(
+              180.0,
+              370.0,
+            );
+            return AnimatedBuilder(
+              animation: _animation,
+              builder: (context, _) {
+                final progress = _animation.value;
+                final reveal = Curves.easeOut.transform(
+                  ((progress - .12) / .25).clamp(0.0, 1.0),
+                );
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.auto_awesome_outlined,
+                                  size: 16,
+                                  color: AppColors.coral,
+                                ),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                    'A LITTLE SMOOCH',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      letterSpacing: 1.6,
+                                      color: AppColors.muted,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                TextButton(
+                                  key: const Key('skip-splash'),
+                                  onPressed: _openMenu,
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: AppColors.muted,
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'Skip intro',
+                                        style: TextStyle(fontSize: 11),
+                                      ),
+                                      SizedBox(width: 6),
+                                      Icon(Icons.arrow_forward, size: 15),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(height: 8),
+                              BrandLogo(width: compact ? 142 : 178),
+                              SizedBox(
+                                width: math.min(constraints.maxWidth, 500),
+                                height: sceneHeight,
+                                child: RepaintBoundary(
+                                  child: Semantics(
+                                    label: 'A floating Smooch Cafe cup with orbiting coffee beans and rising steam',
+                                    image: true,
+                                    child: ExcludeSemantics(
+                                      child: CustomPaint(
+                                        key: const Key('coffee-scene'),
+                                        painter: CoffeeScenePainter(
+                                          progress: progress,
+                                          reducedMotion:
+                                              _reducedMotion ?? false,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Opacity(
+                                opacity: _reducedMotion == true ? 1 : reveal,
+                                child: Transform.translate(
+                                  offset: Offset(
+                                    0,
+                                    _reducedMotion == true
+                                        ? 0
+                                        : 16 * (1 - reveal),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Text(
+                                        'A little magic.',
+                                        textAlign: TextAlign.center,
+                                        style: displayStyle(
+                                          compact ? 31 : 38,
+                                          color: AppColors.white,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'A lot of Smooch.',
+                                        textAlign: TextAlign.center,
+                                        style: displayStyle(
+                                          compact ? 31 : 38,
+                                          color: AppColors.coral,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 15),
+                                      const Text(
+                                        'Your daily dose of happy is on its way.',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          height: 1.7,
+                                          color: AppColors.muted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Padding(
+                            padding: EdgeInsets.only(
+                              top: compact ? 26 : 36,
+                              bottom: 28,
+                            ),
+                            child: Column(
+                              children: [
+                                SizedBox(
+                                  width: 128,
+                                  child: LinearProgressIndicator(
+                                    value: progress,
+                                    semanticsLabel:
+                                        'Opening the Smooch Cafe menu',
+                                    color: AppColors.coral,
+                                    backgroundColor: AppColors.white.withValues(
+                                      alpha: .12,
+                                    ),
+                                    borderRadius: BorderRadius.circular(4),
+                                    minHeight: 3,
+                                  ),
+                                ),
+                                const SizedBox(height: 17),
+                                const Text(
+                                  'COFFEE. COMFORT. CONNECTION.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 8,
+                                    letterSpacing: 1.9,
+                                    color: AppColors.muted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
+
+class _MenuTransition extends StatelessWidget {
+  const _MenuTransition({required this.animation, required this.child});
+
+  final Animation<double> animation;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: animation,
+    child: RepaintBoundary(child: child),
+    builder: (context, menu) {
+      // Finish covering the splash before the menu appears, avoiding ghosted
+      // cup/text over the product grid during the route replacement.
+      final cover = const Interval(
+        0,
+        .4,
+        curve: Curves.easeInOutCubic,
+      ).transform(animation.value);
+      final reveal = const Interval(
+        .4,
+        1,
+        curve: Curves.easeInOutCubic,
+      ).transform(animation.value);
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Opacity(
+            key: const Key('splash-fade-cover'),
+            opacity: cover,
+            child: const ColoredBox(color: AppColors.dark),
+          ),
+          ExcludeSemantics(
+            excluding: animation.value < 1,
+            child: IgnorePointer(
+              ignoring: animation.value < 1,
+              child: Opacity(
+                key: const Key('menu-reveal'),
+                opacity: reveal,
+                child: Transform.translate(
+                  offset: Offset(0, 18 * (1 - reveal)),
+                  child: menu,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+// ============================================================
+// MENU SCREEN
+// ============================================================
+class MenuScreen extends StatefulWidget {
+  const MenuScreen({super.key, required this.controller});
+  final ShopController controller;
+
+  @override
+  State<MenuScreen> createState() => _MenuScreenState();
+}
+
+class _MenuScreenState extends State<MenuScreen> {
+  int tab = 0;
+  final search = TextEditingController();
+  final scrolls = List.generate(3, (_) => ScrollController());
+  ShopController get shop => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    search.text = shop.query;
+  }
+
+  @override
+  void dispose() {
+    search.dispose();
+    for (final scroll in scrolls) {
+      scroll.dispose();
+    }
+    super.dispose();
+  }
+
+  void openCart() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => CartScreen(controller: shop)),
+    );
+  }
+
+  void selectTab(int value) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => tab = value);
+  }
+
+  void resetPosition() {
+    if (scrolls[0].hasClients && scrolls[0].offset > 0) scrolls[0].jumpTo(0);
+  }
+
+  void selectCategory(String category) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    shop.selectCategory(category);
+    resetPosition();
+  }
+
+  void queryChanged(String query) {
+    shop.search(query);
+    resetPosition();
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final wide = constraints.maxWidth >= 800;
+      final padding = wide ? 24.0 : 16.0;
+      final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+      final searchHeight = math.max(56.0, 14 * scale + 32);
+      final categoryHeight = math.max(48.0, 13 * scale + 30);
+      return ListenableBuilder(
+        listenable: shop,
+        builder: (context, _) {
+          final items = tab == 1 ? shop.favorites : shop.filteredProducts;
+          return Scaffold(
+            appBar: AppBar(
+              automaticallyImplyLeading: false,
+              toolbarHeight: 72,
+              titleSpacing: 0,
+              title: ContentWidth(
+                padding: EdgeInsets.symmetric(horizontal: padding),
+                child: Row(
+                  children: [
+                    const BrandLogo(width: 112),
+                    const Spacer(),
+                    if (wide) ...[
+                      for (final entry in [
+                        'Our menu',
+                        'Favorites',
+                        'Our cafe',
+                      ].asMap().entries)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: TextButton(
+                            onPressed: () => selectTab(entry.key),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.white,
+                              backgroundColor: tab == entry.key
+                                  ? AppColors.white.withValues(alpha: .12)
+                                  : null,
+                              minimumSize: const Size(80, 48),
+                            ),
+                            child: Text(
+                              entry.value,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(width: 20),
+                    ],
+                    CartButton(controller: shop, onPressed: openCart),
+                  ],
+                ),
+              ),
+            ),
+            bottomNavigationBar: (wide && shop.cartCount == 0)
+                ? null
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (shop.cartCount > 0)
+                        _BagSummary(
+                          controller: shop,
+                          onPressed: openCart,
+                          bottomSafeArea: wide,
+                        ),
+                      if (!wide)
+                        NavigationBar(
+                          selectedIndex: tab,
+                          onDestinationSelected: selectTab,
+                          height: 72,
+                          destinations: const [
+                            NavigationDestination(
+                              icon: Icon(Icons.grid_view_outlined),
+                              selectedIcon: Icon(
+                                Icons.grid_view_rounded,
+                                color: AppColors.dark,
+                              ),
+                              label: 'Our menu',
+                            ),
+                            NavigationDestination(
+                              icon: Icon(Icons.favorite_border),
+                              selectedIcon: Icon(
+                                Icons.favorite,
+                                color: AppColors.dark,
+                              ),
+                              label: 'Favorites',
+                            ),
+                            NavigationDestination(
+                              icon: Icon(Icons.storefront_outlined),
+                              selectedIcon: Icon(
+                                Icons.storefront,
+                                color: AppColors.dark,
+                              ),
+                              label: 'Our cafe',
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+            body: CustomScrollView(
+              key: PageStorageKey('menu-tab-$tab'),
+              controller: scrolls[tab],
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              slivers: [
+                SliverToBoxAdapter(
+                  child: ContentWidth(
+                    padding: EdgeInsets.symmetric(horizontal: padding),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 24, bottom: 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (tab == 0) ...[
+                            const Eyebrow('Smooch Cafe · Carmona'),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Made for your cravings.',
+                              style: displayStyle(wide ? 38 : 29),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Your favorite sip. Your next little treat.',
+                              style: TextStyle(
+                                color: AppColors.secondaryText,
+                                fontSize: 14,
+                                height: 1.5,
+                              ),
+                            ),
+                          ] else if (tab == 1) ...[
+                            const Eyebrow('Saved with love'),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Your happy little list.',
+                              style: displayStyle(32),
+                            ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'All the things you’ll want to come back for.',
+                              style: TextStyle(
+                                color: AppColors.secondaryText,
+                                fontSize: 14,
+                                height: 1.6,
+                              ),
+                            ),
+                          ] else
+                            CafeSection(onBrowse: () => selectTab(0)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (tab == 0)
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: MenuFilterHeader(
+                      height: searchHeight + categoryHeight + 28,
+                      child: MenuFilters(
+                        controller: shop,
+                        search: search,
+                        onQuery: queryChanged,
+                        onCategory: selectCategory,
+                        horizontalPadding: padding,
+                        searchHeight: searchHeight,
+                        categoryHeight: categoryHeight,
+                      ),
+                    ),
+                  ),
+                if (tab != 2) ...[
+                  SliverToBoxAdapter(
+                    child: ContentWidth(
+                      padding: EdgeInsets.symmetric(horizontal: padding),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 14, bottom: 16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    tab == 1
+                                        ? 'Your favorites'
+                                        : shop.query.trim().isNotEmpty
+                                        ? 'Search results'
+                                        : shop.category == 'All'
+                                        ? 'Explore the menu'
+                                        : shop.category,
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${items.length} ${items.length == 1 ? 'item' : 'items'}${shop.query.trim().isNotEmpty && tab == 0 ? ' for “${shop.query.trim()}”' : ''}',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: AppColors.secondaryText,
+                                      fontSize: 12,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (tab == 0)
+                              PopupMenuButton<MenuSort>(
+                                tooltip: 'Sort menu',
+                                initialValue: shop.sort,
+                                onSelected: (value) {
+                                  shop.sortBy(value);
+                                  resetPosition();
+                                },
+                                itemBuilder: (_) => [
+                                  for (final sort in MenuSort.values)
+                                    CheckedPopupMenuItem(
+                                      value: sort,
+                                      checked: shop.sort == sort,
+                                      child: Text(sort.label),
+                                    ),
+                                ],
+                                child: Container(
+                                  constraints: const BoxConstraints(
+                                    minHeight: 48,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: AppColors.border),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.swap_vert, size: 18),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        wide
+                                            ? shop.sort.label
+                                            : switch (shop.sort) {
+                                                MenuSort.recommended => 'Sort',
+                                                MenuSort.priceLow => 'Price ↑',
+                                                MenuSort.priceHigh => 'Price ↓',
+                                                MenuSort.name => 'A–Z',
+                                              },
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (items.isEmpty)
+                    SliverToBoxAdapter(
+                      child: EmptyState(
+                        icon: tab == 1
+                            ? Icons.favorite_border
+                            : Icons.search_off,
+                        title: tab == 1
+                            ? 'Make room for favorites.'
+                            : 'No matches found.',
+                        message: tab == 1
+                            ? 'Tap the heart on a menu item to save it here.'
+                            : shop.category == 'All'
+                            ? 'Try another name or clear your search.'
+                            : 'Nothing matched in ${shop.category}. Try searching all categories.',
+                        action: OutlinedButton(
+                          onPressed: () {
+                            if (tab == 1) {
+                              selectTab(0);
+                            } else if (shop.category != 'All') {
+                              selectCategory('All');
+                            } else {
+                              search.clear();
+                              queryChanged('');
+                            }
+                          },
+                          child: Text(
+                            tab == 1
+                                ? 'Browse the menu'
+                                : shop.category != 'All'
+                                ? 'Search all categories'
+                                : 'Clear search',
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal:
+                            math.max(0, (constraints.maxWidth - 1160) / 2) +
+                            padding,
+                      ),
+                      sliver: SliverLayoutBuilder(
+                        builder: (context, gridConstraints) {
+                          final width = gridConstraints.crossAxisExtent;
+                          final columns = scale > 1.3
+                              ? math
+                                    .max(1, (width / (240 * scale)).floor())
+                                    .clamp(1, 4)
+                              : width >= 1000
+                              ? 4
+                              : width >= 700
+                              ? 3
+                              : width >= 300
+                              ? 2
+                              : 1;
+                          final cardWidth =
+                              (width - 16 * (columns - 1)) / columns;
+                          return SliverGrid.builder(
+                            itemCount: items.length,
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columns,
+                                  crossAxisSpacing: 16,
+                                  mainAxisSpacing: 18,
+                                  mainAxisExtent:
+                                      math.min(cardWidth * .9, 250) +
+                                      192 * scale,
+                                ),
+                            itemBuilder: (_, index) => ProductCard(
+                              product: items[index],
+                              controller: shop,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                    child: Center(
+                      child: Text(
+                        'A little Smooch goes a long way.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppColors.secondaryText,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+class _BagSummary extends StatelessWidget {
+  const _BagSummary({
+    required this.controller,
+    required this.onPressed,
+    required this.bottomSafeArea,
+  });
+  final ShopController controller;
+  final VoidCallback onPressed;
+  final bool bottomSafeArea;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: const BoxDecoration(
+      color: AppColors.surface,
+      border: Border(top: BorderSide(color: AppColors.border)),
+    ),
+    child: SafeArea(
+      top: false,
+      bottom: bottomSafeArea,
+      child: ContentWidth(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Semantics(
+          liveRegion: true,
+          child: FilledButton(
+            key: const Key('view-bag-summary'),
+            onPressed: onPressed,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.dark,
+              minimumSize: const Size(double.infinity, 56),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withValues(alpha: .15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${controller.cartCount}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'View bag',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Text(
+                  pesos(controller.total),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Icon(Icons.arrow_forward, size: 18),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+// ============================================================
+// SEARCH AND CATEGORY FILTER CONTROLS
+// ============================================================
+class MenuFilterHeader extends SliverPersistentHeaderDelegate {
+  MenuFilterHeader({required this.height, required this.child});
+  final double height;
+  final Widget child;
+
+  @override
+  double get minExtent => height;
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) => Material(
+    color: AppColors.canvas,
+    elevation: overlapsContent ? 3 : 0,
+    shadowColor: AppColors.dark.withValues(alpha: .12),
+    child: child,
+  );
+
+  @override
+  bool shouldRebuild(MenuFilterHeader oldDelegate) =>
+      height != oldDelegate.height || child != oldDelegate.child;
+}
+
+class MenuFilters extends StatelessWidget {
+  const MenuFilters({
+    super.key,
+    required this.controller,
+    required this.search,
+    required this.onQuery,
+    required this.onCategory,
+    required this.horizontalPadding,
+    required this.searchHeight,
+    required this.categoryHeight,
+  });
+
+  final ShopController controller;
+  final TextEditingController search;
+  final ValueChanged<String> onQuery;
+  final ValueChanged<String> onCategory;
+  final double horizontalPadding;
+  final double searchHeight;
+  final double categoryHeight;
+
+  @override
+  Widget build(BuildContext context) => ContentWidth(
+    padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Column(
+        children: [
+          SizedBox(
+            height: searchHeight,
+            child: TextField(
+              key: const Key('menu-search'),
+              controller: search,
+              onChanged: onQuery,
+              style: const TextStyle(fontSize: 14),
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              decoration: InputDecoration(
+                hintText: 'Search drinks, food or pastries',
+                prefixIcon: const Icon(Icons.search, size: 22),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+                suffixIcon: controller.query.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear search',
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () {
+                          search.clear();
+                          onQuery('');
+                        },
+                      ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: categoryHeight,
+            child: _CategoryStrip(
+              selected: controller.category,
+              onSelected: onCategory,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _CategoryStrip extends StatefulWidget {
+  const _CategoryStrip({required this.selected, required this.onSelected});
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  @override
+  State<_CategoryStrip> createState() => _CategoryStripState();
+}
+
+class _CategoryStripState extends State<_CategoryStrip> {
+  final scroll = ScrollController();
+  final rowKey = GlobalKey();
+  final categoryKeys = {
+    for (final category in ShopController.categories) category: GlobalKey(),
+  };
+  double availableWidth = 0;
+  bool overflowing = false;
+  bool canGoBack = false;
+  bool canGoForward = false;
+  bool layoutCheckScheduled = false;
+  bool revealSelected = true;
+
+  @override
+  void initState() {
+    super.initState();
+    scroll.addListener(updateArrows);
+  }
+
+  @override
+  void didUpdateWidget(_CategoryStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected != oldWidget.selected) revealSelected = true;
+  }
+
+  @override
+  void dispose() {
+    scroll.dispose();
+    super.dispose();
+  }
+
+  void updateArrows() {
+    if (!mounted || !scroll.hasClients) return;
+    final back = scroll.position.extentBefore > 1;
+    final forward = scroll.position.extentAfter > 1;
+    if (back != canGoBack || forward != canGoForward) {
+      setState(() {
+        canGoBack = back;
+        canGoForward = forward;
+      });
+    }
+  }
+
+  Duration get motionDuration => MediaQuery.disableAnimationsOf(context)
+      ? Duration.zero
+      : const Duration(milliseconds: 220);
+
+  void checkLayoutAfterFrame() {
+    if (layoutCheckScheduled) return;
+    layoutCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      layoutCheckScheduled = false;
+      if (!mounted || !scroll.hasClients) return;
+      final row = rowKey.currentContext?.findRenderObject() as RenderBox?;
+      final needsArrows = row != null && row.size.width > availableWidth + 1;
+      if (needsArrows != overflowing) {
+        setState(() => overflowing = needsArrows);
+        // Recheck after arrow buttons change the scroll viewport width.
+        return;
+      }
+      if (revealSelected) {
+        revealSelected = false;
+        final selected = categoryKeys[widget.selected]?.currentContext
+            ?.findRenderObject();
+        if (selected != null) {
+          // Only scroll this strip, preserving the menu's vertical position.
+          scroll.position.ensureVisible(
+            selected,
+            alignment: .5,
+            duration: motionDuration,
+            curve: Curves.easeOutCubic,
+          );
+        }
+      }
+      updateArrows();
+    });
+  }
+
+  void move(double direction) {
+    final position = scroll.position;
+    final target = (scroll.offset + direction * position.viewportDimension * .8)
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
+    if (motionDuration == Duration.zero) {
+      scroll.jumpTo(target);
+    } else {
+      scroll.animateTo(
+        target,
+        duration: motionDuration,
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      if (availableWidth != constraints.maxWidth) revealSelected = true;
+      availableWidth = constraints.maxWidth;
+      checkLayoutAfterFrame();
+      return Row(
+        children: [
+          if (overflowing)
+            IconButton(
+              key: const Key('previous-categories'),
+              tooltip: 'Previous categories',
+              onPressed: canGoBack ? () => move(-1) : null,
+              style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+              icon: const Icon(Icons.chevron_left),
+            ),
+          Expanded(
+            child: SingleChildScrollView(
+              key: const Key('category-scroll'),
+              controller: scroll,
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                key: rowKey,
+                children: [
+                  for (final category in ShopController.categories)
+                    Padding(
+                      key: categoryKeys[category],
+                      padding: EdgeInsets.only(
+                        right: category == ShopController.categories.last
+                            ? 0
+                            : 8,
+                      ),
+                      child: ChoiceChip(
+                        key: Key('category-$category'),
+                        label: Text(category == 'All' ? 'All items' : category),
+                        selected: widget.selected == category,
+                        onSelected: (_) => widget.onSelected(category),
+                        showCheckmark: true,
+                        checkmarkColor: AppColors.white,
+                        selectedColor: AppColors.dark,
+                        backgroundColor: AppColors.surface,
+                        side: BorderSide(
+                          color: widget.selected == category
+                              ? AppColors.dark
+                              : AppColors.border,
+                        ),
+                        labelStyle: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: widget.selected == category
+                              ? AppColors.white
+                              : AppColors.ink,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          if (overflowing)
+            IconButton(
+              key: const Key('next-categories'),
+              tooltip: 'Next categories',
+              onPressed: canGoForward ? () => move(1) : null,
+              style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+              icon: const Icon(Icons.chevron_right),
+            ),
+        ],
+      );
+    },
+  );
+}
+
+// ============================================================
+// PRODUCT CARD
+// ============================================================
+class ProductCard extends StatelessWidget {
+  const ProductCard({
+    super.key,
+    required this.product,
+    required this.controller,
+  });
+  final Product product;
+  final ShopController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final quantity = controller.quantityOf(product);
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: Key('product-${product.id}'),
+        onTap: () {
+          FocusManager.instance.primaryFocus?.unfocus();
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => ProductDetailsScreen(
+                product: product,
+                controller: controller,
+              ),
+            ),
+          );
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ProductImage(product: product),
+                  if (product.featured)
+                    Positioned(
+                      left: 10,
+                      top: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Cafe pick',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.dark,
+                          ),
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    right: 4,
+                    top: 4,
+                    child: IconButton.filled(
+                      tooltip: controller.isFavorite(product)
+                          ? 'Unsave ${product.name}'
+                          : 'Save ${product.name}',
+                      onPressed: () => controller.toggleFavorite(product),
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.surface,
+                        foregroundColor: AppColors.dark,
+                        minimumSize: const Size(48, 48),
+                      ),
+                      icon: Icon(
+                        controller.isFavorite(product)
+                            ? Icons.favorite
+                            : Icons.favorite_border,
+                        size: 21,
+                        color: controller.isFavorite(product)
+                            ? AppColors.action
+                            : AppColors.dark,
+                      ),
+                    ),
+                  ),
+                  if (quantity > 0)
+                    Positioned(
+                      left: 10,
+                      bottom: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.dark,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '$quantity in bag',
+                          style: const TextStyle(
+                            color: AppColors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.category,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.secondaryText,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: MediaQuery.textScalerOf(context).scale(15) * 2.7,
+                    child: Text(
+                      product.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    pesos(product.price),
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.dark,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: Tooltip(
+                      message: 'Add ${product.name} to cart',
+                      child: FilledButton.icon(
+                        key: Key('add-${product.id}'),
+                        onPressed: () => controller.addToCart(product),
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Add to bag'),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 12,
+                          ),
+                          minimumSize: const Size(48, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// PRODUCT DETAILS SCREEN
+// ============================================================
+class ProductDetailsScreen extends StatefulWidget {
+  const ProductDetailsScreen({
+    super.key,
+    required this.product,
+    required this.controller,
+  });
+  final Product product;
+  final ShopController controller;
+
+  @override
+  State<ProductDetailsScreen> createState() => _ProductDetailsScreenState();
+}
+
+class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
+  int quantity = 1;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('A little closer', style: TextStyle(fontSize: 15)),
+      actions: [
+        CartButton(
+          controller: widget.controller,
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => CartScreen(controller: widget.controller),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+      ],
+    ),
+    body: SingleChildScrollView(
+      child: ContentWidth(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 28),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 700;
+              return Flex(
+                direction: wide ? Axis.horizontal : Axis.vertical,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Flexible(
+                    flex: wide ? 1 : 0,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(28),
+                      child: AspectRatio(
+                        aspectRatio: wide ? 1 : 1.1,
+                        child: ProductImage(product: widget.product),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: wide ? 44 : 0, height: wide ? 0 : 28),
+                  Flexible(
+                    flex: wide ? 1 : 0,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: Eyebrow(widget.product.category)),
+                            ListenableBuilder(
+                              listenable: widget.controller,
+                              builder: (context, _) => IconButton(
+                                tooltip:
+                                    widget.controller.isFavorite(widget.product)
+                                    ? 'Remove from favorites'
+                                    : 'Save to favorites',
+                                onPressed: () => widget.controller
+                                    .toggleFavorite(widget.product),
+                                icon: Icon(
+                                  widget.controller.isFavorite(widget.product)
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
+                                  color: AppColors.action,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(widget.product.name, style: displayStyle(38)),
+                        const SizedBox(height: 18),
+                        Text(
+                          pesos(widget.product.price),
+                          style: const TextStyle(
+                            fontSize: 25,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        const Divider(),
+                        const SizedBox(height: 18),
+                        const Text(
+                          'A little comfort in every order',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          widget.product.description,
+                          style: const TextStyle(
+                            color: AppColors.secondaryText,
+                            height: 1.9,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+                        const Text(
+                          'How many happy moments?',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        QuantityPicker(
+                          quantity: quantity,
+                          onDecrease: quantity > 1
+                              ? () => setState(() => quantity--)
+                              : null,
+                          onIncrease: () => setState(() => quantity++),
+                        ),
+                        const SizedBox(height: 28),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            key: const Key('details-add-to-cart'),
+                            onPressed: () {
+                              widget.controller.addToCart(
+                                widget.product,
+                                quantity: quantity,
+                              );
+                              Navigator.of(context).pop();
+                              ScaffoldMessenger.of(context)
+                                  .hideCurrentSnackBar();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '$quantity × ${widget.product.name} added to your bag.',
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.shopping_bag_outlined,
+                              size: 18,
+                            ),
+                            label: Text(
+                              'Add to bag • ${pesos(widget.product.price * quantity)}',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        const Row(
+                          children: [
+                            Icon(
+                              Icons.favorite_border,
+                              color: AppColors.action,
+                              size: 15,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Made with love at Smooch Cafe.',
+                              style: TextStyle(
+                                color: AppColors.secondaryText,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+// ============================================================
+// CART SCREEN
+// ============================================================
+class CartScreen extends StatelessWidget {
+  const CartScreen({super.key, required this.controller});
+  final ShopController controller;
+
+  void reviewOrder(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text('Your happy little order.', style: displayStyle(28)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Eyebrow('Demo checkout'),
+              const SizedBox(height: 20),
+              for (final item in controller.cartItems)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${item.quantity} × ${item.product.name}',
+                          style: const TextStyle(fontSize: 12, height: 1.6),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Text(
+                        pesos(item.total),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+              const Divider(),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Expanded(child: Text('Total')),
+                  Text(
+                    pesos(controller.total),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'This is a preview checkout. Orders and payments are not submitted. Your bag will stay saved while you browse.',
+                style: TextStyle(
+                  color: AppColors.secondaryText,
+                  fontSize: 12,
+                  height: 1.7,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Back to my bag'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) => Scaffold(
+      appBar: AppBar(
+        title: const Text('Your bag', style: TextStyle(fontSize: 16)),
+      ),
+      body: controller.cartItems.isEmpty
+          ? Center(
+              child: SingleChildScrollView(
+                child: EmptyState(
+                  icon: Icons.shopping_bag_outlined,
+                  title: 'A little empty, for now.',
+                  message:
+                      'Your next favorite sip or bite is waiting on the menu.',
+                  action: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Explore the menu'),
+                  ),
+                ),
+              ),
+            )
+          : CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: ContentWidth(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 28, bottom: 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Eyebrow('Good things in the bag'),
+                          const SizedBox(height: 10),
+                          Text(
+                            'A craving, well curated.',
+                            style: displayStyle(32),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            '${controller.cartCount} ${controller.cartCount == 1 ? 'item' : 'items'} to brighten your day.',
+                            style: const TextStyle(
+                              color: AppColors.secondaryText,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                SliverList.builder(
+                  itemCount: controller.cartItems.length,
+                  itemBuilder: (context, index) {
+                    final item = controller.cartItems[index];
+                    return ContentWidth(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: _CartRow(item: item, controller: controller),
+                      ),
+                    );
+                  },
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 20)),
+              ],
+            ),
+      bottomNavigationBar: controller.cartItems.isEmpty
+          ? null
+          : ColoredBox(
+              color: AppColors.surface,
+              child: SafeArea(
+                child: ContentWidth(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('Total', style: TextStyle(fontSize: 16)),
+                            const Spacer(),
+                            Text(
+                              pesos(controller.total),
+                              key: const Key('cart-total'),
+                              style: const TextStyle(
+                                fontSize: 23,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Menu prices in Philippine pesos.',
+                            style: TextStyle(
+                              color: AppColors.secondaryText,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () => reviewOrder(context),
+                            iconAlignment: IconAlignment.end,
+                            icon: const Icon(Icons.arrow_forward, size: 18),
+                            label: const Text('Review order'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+    ),
+  );
+}
+
+class _CartRow extends StatelessWidget {
+  const _CartRow({required this.item, required this.controller});
+  final CartItem item;
+  final ShopController controller;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 450;
+        return Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    width: compact ? 68 : 100,
+                    height: compact ? 80 : 100,
+                    child: ProductImage(product: item.product),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.product.category.toUpperCase(),
+                        style: const TextStyle(
+                          color: AppColors.secondaryText,
+                          fontSize: 11,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        item.product.name,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${pesos(item.product.price)} each',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Remove ${item.product.name}',
+                  onPressed: () => controller.remove(item.product),
+                  icon: const Icon(
+                    Icons.close,
+                    size: 18,
+                    color: AppColors.secondaryText,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                QuantityPicker(
+                  quantity: item.quantity,
+                  onDecrease: () => controller.decrease(item.product),
+                  onIncrease: () => controller.addToCart(item.product),
+                ),
+                const Spacer(),
+                Text(
+                  pesos(item.total),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+// ============================================================
+// CAFE INFORMATION
+// ============================================================
+class CafeSection extends StatelessWidget {
+  const CafeSection({super.key, required this.onBrowse});
+  final VoidCallback onBrowse;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Eyebrow('Your neighborhood happy place'),
+      const SizedBox(height: 14),
+      Text(
+        'Come for the coffee.\nStay for the comfort.',
+        style: displayStyle(34),
+      ),
+      const SizedBox(height: 24),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: ColoredBox(
+          color: AppColors.softTeal,
+          child: SizedBox(
+            height: 240,
+            width: double.infinity,
+            child: Image.asset(
+              'SmoochCafe/images/landing1.png',
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 24),
+      const Text(
+        'A little about Smooch',
+        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 12),
+      const Text(
+        'Black tea and coffee lovers dedicated to quality, sustainability, and the perfect cup. From handcrafted drinks to warm meals and freshly baked pastries, there’s comfort for every craving.',
+        style: TextStyle(
+          color: AppColors.secondaryText,
+          fontSize: 14,
+          height: 1.8,
+        ),
+      ),
+      const SizedBox(height: 22),
+      const _CafeInfo(
+        icon: Icons.location_on_outlined,
+        title: 'Find us',
+        text: '447 JM Loyola Street, Carmona, Cavite',
+      ),
+      const _CafeInfo(
+        icon: Icons.schedule,
+        title: 'Opening hours',
+        text: 'Monday–Sunday • 2:00 PM–11:00 PM',
+      ),
+      const _CafeInfo(
+        icon: Icons.phone_outlined,
+        title: 'Give us a call',
+        text: '(0965) 760 8290',
+      ),
+      const _CafeInfo(
+        icon: Icons.mail_outline,
+        title: 'Say hello',
+        text: 'smoochcafe25@gmail.com',
+      ),
+      const SizedBox(height: 24),
+      FilledButton.icon(
+        onPressed: onBrowse,
+        icon: const Icon(Icons.restaurant_menu),
+        label: const Text('Explore our menu'),
+      ),
+    ],
+  );
+}
+
+class _CafeInfo extends StatelessWidget {
+  const _CafeInfo({
+    required this.icon,
+    required this.title,
+    required this.text,
+  });
+  final IconData icon;
+  final String title;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: AppColors.teal, size: 22),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 6),
+              SelectableText(
+                text,
+                style: const TextStyle(
+                  color: AppColors.secondaryText,
+                  fontSize: 14,
+                  height: 1.7,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+// ============================================================
+// 3D COFFEE SCENE DRAWING
+// ============================================================
+// A small perspective renderer: the cup is a shaded surface of revolution.
+// Faces are sorted by depth; visible lettering follows the curved cup surface.
+class CoffeeScenePainter extends CustomPainter {
+  CoffeeScenePainter({required this.progress, required this.reducedMotion});
+
+  final double progress;
+  final bool reducedMotion;
+  static const _cream = Color(0xFFF5E8D6);
+  static const _lid = Color(0xFFFFF5E8);
+  static const _light = _Vector(-.45, .65, 1);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final time = reducedMotion ? 1.0 : progress;
+    final arrival = reducedMotion
+        ? 1.0
+        : Curves.easeOutBack.transform((time / .25).clamp(0.0, 1.0));
+    final turn = Curves.easeInOutCubic.transform(
+      ((time - .05) / .78).clamp(0.0, 1.0),
+    );
+    final yaw = reducedMotion ? -.14 : -.65 + math.pi * 2 * turn + .51 * turn;
+    final tilt = reducedMotion ? .27 : .27 + math.sin(time * math.pi * 2) * .08;
+    final roll = reducedMotion
+        ? -.08
+        : -.08 + math.sin(time * math.pi * 2) * .1;
+    final float = reducedMotion ? 0.0 : math.sin(time * math.pi * 3) * .09;
+    final unit = math.min(size.width / 4.5, size.height / 4.25);
+    final center = Offset(size.width / 2, size.height * .51);
+
+    _Vector rotate(_Vector p) {
+      final x = p.x * math.cos(yaw) + p.z * math.sin(yaw);
+      final z = -p.x * math.sin(yaw) + p.z * math.cos(yaw);
+      final y = p.y * math.cos(tilt) - z * math.sin(tilt);
+      final depth = p.y * math.sin(tilt) + z * math.cos(tilt);
+      return _Vector(
+        x * math.cos(roll) - y * math.sin(roll),
+        x * math.sin(roll) + y * math.cos(roll),
+        depth,
+      );
+    }
+
+    Offset project(_Vector p) {
+      final perspective = 7 / (7 - p.z);
+      return center +
+          Offset(p.x, -p.y - float) * (unit * perspective * arrival);
+    }
+
+    final glowRect = Rect.fromCenter(
+      center: center,
+      width: unit * 4.5,
+      height: unit * 4.5,
+    );
+    canvas.drawOval(
+      glowRect,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            const Color(0xFF4EB5AF).withValues(alpha: .21),
+            AppColors.teal.withValues(alpha: 0),
+          ],
+        ).createShader(glowRect),
+    );
+
+    final shadow = Rect.fromCenter(
+      center: center + Offset(0, unit * 1.65),
+      width: unit * (2.15 - float),
+      height: unit * .25,
+    );
+    canvas.drawOval(
+      shadow,
+      Paint()
+        ..color = const Color(0xFF031D22)
+            .withValues(alpha: .34 * arrival.clamp(0, 1))
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, unit * .15),
+    );
+
+    // Fine orbital paths sit behind the sculpture; their moving beads add depth.
+    for (var orbit = 0; orbit < 2; orbit++) {
+      final path = Path();
+      for (var i = 0; i <= 100; i++) {
+        final angle = math.pi * 2 * i / 100;
+        final point = project(
+          _Vector(
+            math.cos(angle) * (1.92 + orbit * .12),
+            math.sin(angle) * (.44 + orbit * .15) - .1,
+            math.sin(angle) * .6,
+          ),
+        );
+        if (i == 0) {
+          path.moveTo(point.dx, point.dy);
+        } else {
+          path.lineTo(point.dx, point.dy);
+        }
+      }
+      canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = .7
+          ..color = AppColors.muted.withValues(alpha: orbit == 0 ? .19 : .08),
+      );
+    }
+
+    final surfaces = <_Surface>[];
+    final lettering = <_Surface>[];
+    final beans = <_Surface>[];
+    void addFace(List<_Vector> points, Color color, _Vector normal) {
+      final transformed = points.map(rotate).toList(growable: false);
+      final light = math.max(
+        0.0,
+        rotate(normal).normalized.dot(_light.normalized),
+      );
+      final brightness = .57 + .43 * light;
+      final shade = Color.fromARGB(
+        255,
+        (color.r * 255 * brightness).round().clamp(0, 255),
+        (color.g * 255 * brightness).round().clamp(0, 255),
+        (color.b * 255 * brightness).round().clamp(0, 255),
+      );
+      final path = Path()..addPolygon(transformed.map(project).toList(), true);
+      surfaces.add(
+        _Surface(
+          transformed.fold(0.0, (sum, p) => sum + p.z) / transformed.length,
+          (canvas) {
+            final paint = Paint()
+              ..color = shade
+              ..isAntiAlias = false;
+            canvas.drawPath(path, paint);
+            canvas.drawPath(
+              path,
+              paint
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = .5,
+            );
+          },
+        ),
+      );
+    }
+
+    void lathe(List<(double, double)> rings, Color color) {
+      const segments = 80;
+      for (var ring = 0; ring < rings.length - 1; ring++) {
+        final (bottom, lowerRadius) = rings[ring];
+        final (top, upperRadius) = rings[ring + 1];
+        for (var segment = 0; segment < segments; segment++) {
+          final a = segment * math.pi * 2 / segments;
+          final b = (segment + 1) * math.pi * 2 / segments;
+          final middle = (a + b) / 2;
+          addFace(
+            [
+              _Vector(
+                lowerRadius * math.cos(a),
+                bottom,
+                lowerRadius * math.sin(a),
+              ),
+              _Vector(
+                lowerRadius * math.cos(b),
+                bottom,
+                lowerRadius * math.sin(b),
+              ),
+              _Vector(
+                upperRadius * math.cos(b),
+                top,
+                upperRadius * math.sin(b),
+              ),
+              _Vector(
+                upperRadius * math.cos(a),
+                top,
+                upperRadius * math.sin(a),
+              ),
+            ],
+            color,
+            _Vector(
+              math.cos(middle),
+              (lowerRadius - upperRadius) / math.max(.001, top - bottom),
+              math.sin(middle),
+            ),
+          );
+        }
+      }
+    }
+
+    // Adjacent material bands share edges instead of overlapping cylinders.
+    lathe([(-1.33, .66), (-1.29, .70), (-.80, .751), (-.78, .775)], _cream);
+    lathe([(-.72, .783), (.43, .901)], AppColors.teal);
+    lathe([(-.78, .775), (-.72, .783)], AppColors.coral);
+    lathe([(.43, .901), (.47, .907)], AppColors.coral);
+    lathe([(.47, .907), (.49, .885), (1.02, .94), (1.09, .95)], _cream);
+    lathe([
+      (1.04, .96),
+      (1.08, 1.035),
+      (1.14, 1.04),
+      (1.18, 1.0),
+      (1.21, .975),
+      (1.34, .93),
+      (1.39, .87),
+    ], _lid);
+    addFace(
+      List.generate(64, (i) {
+        final angle = i * math.pi * 2 / 64;
+        return _Vector(.87 * math.cos(angle), 1.39, .87 * math.sin(angle));
+      }),
+      _lid,
+      const _Vector(0, 1, 0),
+    );
+    // The sip opening sits on the lid's top plane.
+    addFace(
+      List.generate(20, (i) {
+        final angle = i * math.pi * 2 / 20;
+        return _Vector(
+          .22 * math.cos(angle),
+          1.397,
+          .57 + .07 * math.sin(angle),
+        );
+      }),
+      const Color(0xFF715A49),
+      const _Vector(0, 1, 0),
+    );
+
+    void label(
+      String text,
+      double y,
+      double fontSize,
+      double spacing,
+      Color color,
+    ) {
+      for (var i = 0; i < text.length; i++) {
+        final angle = math.pi / 2 - (i - (text.length - 1) / 2) * spacing;
+        final radius = .70 + (y + 1.29) * .104 + .024;
+        final position = rotate(
+          _Vector(radius * math.cos(angle), y, radius * math.sin(angle)),
+        );
+        final normal = rotate(_Vector(math.cos(angle), 0, math.sin(angle)));
+        if (normal.z <= .12) continue;
+        final painter = TextPainter(
+          text: TextSpan(
+            text: text[i],
+            style: TextStyle(
+              color: color,
+              fontSize: unit * fontSize,
+              fontFamily: 'Montserrat',
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        final projected = project(position);
+        final perspective = 7 / (7 - position.z);
+        lettering.add(
+          _Surface(position.z + .025, (canvas) {
+            canvas.save();
+            canvas.translate(projected.dx, projected.dy);
+            canvas.rotate(-roll);
+            canvas.scale(
+              perspective * arrival * normal.z,
+              perspective * arrival,
+            );
+            painter.paint(
+              canvas,
+              Offset(-painter.width / 2, -painter.height / 2),
+            );
+            canvas.restore();
+            painter.dispose();
+          }),
+        );
+      }
+    }
+
+    label('SMOOCH', -.03, .265, .205, AppColors.white);
+    label('CAFE', -.36, .14, .17, AppColors.white);
+
+    for (var i = 0; i < 5; i++) {
+      final angle =
+          i * math.pi * 2 / 5 + (reducedMotion ? .3 : time * math.pi * 2 * .8);
+      final position = _Vector(
+        math.cos(angle) * 1.74,
+        math.sin(angle * 1.4 + i) * .8 + .1,
+        math.sin(angle) * 1.5,
+      );
+      final point = project(position);
+      final beanSize =
+          unit * (.13 + i % 2 * .035) * 7 / (7 - position.z) * arrival;
+      beans.add(
+        _Surface(position.z, (canvas) {
+          canvas.save();
+          canvas.translate(point.dx, point.dy);
+          canvas.rotate(angle + .55);
+          final rect = Rect.fromCenter(
+            center: Offset.zero,
+            width: beanSize * 1.4,
+            height: beanSize * 2.05,
+          );
+          canvas.drawOval(
+            rect.shift(Offset(beanSize * .12, beanSize * .18)),
+            Paint()
+              ..color = Colors.black.withValues(alpha: .16)
+              ..maskFilter = MaskFilter.blur(BlurStyle.normal, beanSize * .2),
+          );
+          canvas.drawOval(
+            rect,
+            Paint()
+              ..shader = const RadialGradient(
+                center: Alignment(-.6, -.5),
+                radius: 1.4,
+                colors: [
+                  Color(0xFFC58A58),
+                  Color(0xFF7C482E),
+                  Color(0xFF3B211B),
+                ],
+                stops: [0, .5, 1],
+              ).createShader(rect),
+          );
+          final seam = Path()
+            ..moveTo(0, -beanSize * .85)
+            ..cubicTo(
+              -beanSize * .55,
+              -beanSize * .25,
+              beanSize * .5,
+              beanSize * .2,
+              0,
+              beanSize * .85,
+            );
+          canvas.drawPath(
+            seam,
+            Paint()
+              ..color = const Color(0xFF301F1A)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = beanSize * .13
+              ..strokeCap = StrokeCap.round,
+          );
+          canvas.restore();
+        }),
+      );
+    }
+
+    beans.sort((a, b) => a.depth.compareTo(b.depth));
+    for (final bean in beans.where((bean) => bean.depth < 0)) {
+      bean.draw(canvas);
+    }
+    surfaces.sort((a, b) => a.depth.compareTo(b.depth));
+    for (final surface in surfaces) {
+      surface.draw(canvas);
+    }
+    for (final letter in lettering) {
+      letter.draw(canvas);
+    }
+    for (final bean in beans.where((bean) => bean.depth >= 0)) {
+      bean.draw(canvas);
+    }
+
+    // Steam is intentionally soft and sparse, keeping the cup as the focal point.
+    for (var i = 0; i < 3; i++) {
+      final phase = reducedMotion ? .45 + i * .1 : (time * 1.8 + i / 3) % 1;
+      final alpha = math.sin(phase * math.pi) * .24 * arrival.clamp(0, 1);
+      final start = project(_Vector((i - 1) * .25, 1.46 + phase * .5, 0));
+      final drift = math.sin(phase * math.pi * 2 + i) * unit * .13;
+      final path = Path()
+        ..moveTo(start.dx, start.dy)
+        ..cubicTo(
+          start.dx + drift,
+          start.dy - unit * .18,
+          start.dx - drift,
+          start.dy - unit * .34,
+          start.dx + drift * .5,
+          start.dy - unit * .49,
+        );
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = AppColors.white.withValues(alpha: alpha)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.2
+          ..strokeCap = StrokeCap.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+      );
+    }
+
+    for (var i = 0; i < 10; i++) {
+      final angle = i * 2.4 + (reducedMotion ? 0 : time * .6);
+      final distance = 1.55 + (i % 3) * .22;
+      final point = project(
+        _Vector(math.cos(angle) * distance, math.sin(angle) * 1.5, -.5),
+      );
+      final pulse = reducedMotion ? .6 : .45 + .3 * math.sin(time * 8 + i);
+      canvas.drawCircle(
+        point,
+        i % 3 == 0 ? 2.1 : 1.2,
+        Paint()
+          ..color = (i.isEven ? AppColors.coral : AppColors.muted).withValues(
+            alpha: pulse,
+          ),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(CoffeeScenePainter oldDelegate) =>
+      progress != oldDelegate.progress ||
+      reducedMotion != oldDelegate.reducedMotion;
+}
+
+class _Vector {
+  const _Vector(this.x, this.y, this.z);
+  final double x;
+  final double y;
+  final double z;
+
+  _Vector get normalized {
+    final length = math.sqrt(x * x + y * y + z * z);
+    return _Vector(x / length, y / length, z / length);
+  }
+
+  double dot(_Vector other) => x * other.x + y * other.y + z * other.z;
+}
+
+class _Surface {
+  const _Surface(this.depth, this.draw);
+  final double depth;
+  final void Function(Canvas canvas) draw;
+}
+
+// ============================================================
+// WIDGET PREVIEWS
+// ============================================================
+@Preview(name: 'Animated splash / phone', size: Size(390, 844))
+@Preview(name: 'Animated splash / desktop', size: Size(1440, 900))
+Widget splashPreview() => MaterialApp(
+  theme: AppTheme.theme,
+  home: SplashScreen(
+    autoNavigate: false,
+    controller: ShopController(repository: const MenuRepository()),
+  ),
+);
+
+@Preview(name: 'Menu / phone', size: Size(390, 844))
+@Preview(name: 'Menu / desktop', size: Size(1440, 1000))
+Widget menuPreview() => MaterialApp(
+  theme: AppTheme.theme,
+  home: MenuScreen(
+    controller: ShopController(repository: const MenuRepository()),
+  ),
+);
