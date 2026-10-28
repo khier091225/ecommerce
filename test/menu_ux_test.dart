@@ -117,7 +117,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(shop.category, 'More Drinks');
       expect(
-        shop.filteredProducts.every((p) => p.group == 'More Drinks'),
+        shop.filteredProducts.every((p) => p.category == 'More Drinks'),
         isTrue,
       );
       expect(last.hitTestable(), findsOneWidget);

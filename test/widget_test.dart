@@ -4,72 +4,73 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ecommerce/main.dart';
 
 void main() {
-  testWidgets(
-    'Splash skip, search, details, quantity changes, and empty cart',
-    (tester) async {
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(const MiniShopApp());
-      await tester.pump(const Duration(milliseconds: 1800));
-      expect(find.byType(SplashScreen), findsOneWidget);
-      expect(find.byKey(const Key('coffee-scene')), findsOneWidget);
-      await tester.tap(find.byKey(const Key('skip-splash')));
-      await tester.pumpAndSettle();
-      expect(find.byType(SplashScreen), findsNothing);
-      expect(
-        Navigator.of(tester.element(find.byType(MenuScreen))).canPop(),
-        isFalse,
-      );
+  testWidgets('Shop Now, search, details, quantity changes, and empty cart', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(const MiniShopApp());
+    await tester.pump(const Duration(milliseconds: 1800));
+    expect(find.byType(StartScreen), findsOneWidget);
+    expect(find.byKey(const Key('coffee-scene')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('enter-store')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('enter-store')));
+    await tester.pumpAndSettle();
+    expect(find.byType(StartScreen), findsNothing);
+    expect(
+      Navigator.of(tester.element(find.byType(MenuScreen))).canPop(),
+      isTrue,
+    );
 
-      await tester.ensureVisible(find.byType(TextField));
-      await tester.enterText(find.byType(TextField), 'tiramisu latte');
-      await tester.pumpAndSettle();
-      final product = find.byKey(const Key('product-coffee-tiramisu-latte'));
-      await tester.ensureVisible(product);
-      await tester.tap(product);
-      await tester.pumpAndSettle();
-      expect(find.text('Tiramisu Latte'), findsOneWidget);
-      await tester.ensureVisible(find.byTooltip('Increase quantity'));
-      await tester.tap(find.byTooltip('Increase quantity'));
-      await tester.pump();
-      expect(find.text('Add to bag • ₱290.00'), findsOneWidget);
-      await tester.ensureVisible(find.byKey(const Key('details-add-to-cart')));
-      await tester.tap(find.byKey(const Key('details-add-to-cart')));
-      await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byType(TextField));
+    await tester.enterText(find.byType(TextField), 'tiramisu latte');
+    await tester.pumpAndSettle();
+    final product = find.byKey(const Key('product-coffee-tiramisu-latte'));
+    await tester.ensureVisible(product);
+    await tester.tap(product);
+    await tester.pumpAndSettle();
+    expect(find.text('Tiramisu Latte'), findsOneWidget);
+    await tester.ensureVisible(find.byTooltip('Increase quantity'));
+    await tester.tap(find.byTooltip('Increase quantity'));
+    await tester.pump();
+    expect(find.text('Add to bag • ₱290.00'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('details-add-to-cart')));
+    await tester.tap(find.byKey(const Key('details-add-to-cart')));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('View cart'));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('cart-total')), findsOneWidget);
-      expect(
-        tester.widget<Text>(find.byKey(const Key('cart-total'))).data,
-        '₱290.00',
-      );
-      await tester.tap(find.byTooltip('Increase quantity'));
-      await tester.pump();
-      expect(
-        tester.widget<Text>(find.byKey(const Key('cart-total'))).data,
-        '₱435.00',
-      );
-      await tester.tap(find.byTooltip('Decrease quantity'));
-      await tester.pump();
-      expect(
-        tester.widget<Text>(find.byKey(const Key('cart-total'))).data,
-        '₱290.00',
-      );
-      await tester.tap(find.text('Review order'));
-      await tester.pumpAndSettle();
-      expect(find.text('DEMO CHECKOUT'), findsOneWidget);
-      await tester.tap(find.text('Back to my bag'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Remove Tiramisu Latte'));
-      await tester.pumpAndSettle();
-      expect(find.text('A little empty, for now.'), findsOneWidget);
-      expect(find.byKey(const Key('cart-total')), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    await tester.tap(find.byTooltip('View cart'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cart-total')), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('cart-total'))).data,
+      '₱290.00',
+    );
+    await tester.tap(find.byTooltip('Increase quantity'));
+    await tester.pump();
+    expect(
+      tester.widget<Text>(find.byKey(const Key('cart-total'))).data,
+      '₱435.00',
+    );
+    await tester.tap(find.byTooltip('Decrease quantity'));
+    await tester.pump();
+    expect(
+      tester.widget<Text>(find.byKey(const Key('cart-total'))).data,
+      '₱290.00',
+    );
+    await tester.tap(find.text('Review order'));
+    await tester.pumpAndSettle();
+    expect(find.text('DEMO CHECKOUT'), findsOneWidget);
+    await tester.tap(find.text('Back to my bag'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Remove Tiramisu Latte'));
+    await tester.pumpAndSettle();
+    expect(find.text('A little empty, for now.'), findsOneWidget);
+    expect(find.byKey(const Key('cart-total')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('Favorites and cafe tabs work on a phone', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -114,7 +115,7 @@ void main() {
     const Size(768, 1024),
     const Size(1440, 900),
   ]) {
-    testWidgets('Animated splash and menu fit ${size.width.toInt()}px', (
+    testWidgets('3D start screen and menu fit ${size.width.toInt()}px', (
       tester,
     ) async {
       tester.view.physicalSize = size;
@@ -124,7 +125,9 @@ void main() {
       await tester.pumpWidget(const MiniShopApp());
       await tester.pump(const Duration(milliseconds: 1800));
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byKey(const Key('skip-splash')));
+      await tester.ensureVisible(find.byKey(const Key('enter-store')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('enter-store')));
       await tester.pumpAndSettle();
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -550));
       await tester.pumpAndSettle();
@@ -133,28 +136,88 @@ void main() {
     });
   }
 
-  testWidgets('Splash automatically replaces itself with the menu once', (
-    tester,
-  ) async {
-    await tester.pumpWidget(const MiniShopApp());
-    expect(find.byType(SplashScreen), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 2300));
-    expect(find.byType(MenuScreen), findsNothing);
-    await tester.pump(const Duration(milliseconds: 2400));
-    await tester.pumpAndSettle();
-    expect(find.byType(SplashScreen), findsNothing);
-    expect(find.byType(MenuScreen), findsOneWidget);
-    expect(
-      Navigator.of(tester.element(find.byType(MenuScreen))).canPop(),
-      isFalse,
-    );
-    await tester.pump(const Duration(seconds: 5));
-    expect(find.byType(MenuScreen), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'Start screen waits for Shop Now and pushes a MaterialPageRoute',
+    (tester) async {
+      await tester.pumpWidget(const MiniShopApp());
+      await tester.pump(const Duration(seconds: 10));
+      expect(find.byType(StartScreen), findsOneWidget);
+      expect(find.byType(MenuScreen), findsNothing);
+      await tester.ensureVisible(find.byKey(const Key('enter-store')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('enter-store')));
+      await tester.pumpAndSettle();
+      final menuContext = tester.element(find.byType(MenuScreen));
+      expect(ModalRoute.of(menuContext), isA<MaterialPageRoute<void>>());
+      expect(ModalRoute.of(menuContext)!.settings.name, MenuScreen.routeName);
+      expect(Navigator.of(menuContext).canPop(), isTrue);
+      await tester.tap(find.byTooltip('Back to start'));
+      await tester.pumpAndSettle();
+      expect(find.byType(StartScreen), findsOneWidget);
+      expect(find.byType(MenuScreen), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('enter-store')))
+            .onPressed,
+        isNotNull,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
-    'Reduced motion shows a still splash and promptly opens the menu',
+    'Repeated Shop Now taps open one menu and Back preserves shopping state',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(const MiniShopApp());
+      final enter = tester
+          .widget<FilledButton>(find.byKey(const Key('enter-store')))
+          .onPressed!;
+      enter();
+      enter();
+      await tester.pumpAndSettle();
+      final shop = tester
+          .widget<MenuScreen>(find.byType(MenuScreen))
+          .controller;
+      final add = find.byKey(const Key('add-coffee-tiramisu-latte'));
+      await Scrollable.ensureVisible(tester.element(add), alignment: .5);
+      await tester.pumpAndSettle();
+      await tester.tap(add);
+      await tester.pumpAndSettle();
+      await Scrollable.ensureVisible(
+        tester.element(find.byTooltip('Save Tiramisu Latte')),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Save Tiramisu Latte'));
+      await tester.pumpAndSettle();
+      expect(shop.total, 145);
+      expect(shop.favorites, hasLength(1));
+      await tester.tap(find.byTooltip('Back to start'));
+      await tester.pumpAndSettle();
+      expect(find.byType(StartScreen), findsOneWidget);
+      expect(find.byType(MenuScreen), findsNothing);
+      await tester.ensureVisible(find.byKey(const Key('enter-store')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('enter-store')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<MenuScreen>(find.byType(MenuScreen)).controller,
+        same(shop),
+      );
+      expect(shop.cartCount, 1);
+      expect(shop.total, 145);
+      expect(shop.favorites, hasLength(1));
+      expect(find.byKey(const Key('view-bag-summary')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Reduced motion keeps a still start screen and enters only on tap',
     (tester) async {
       final controller = ShopController(repository: const MenuRepository());
       addTearDown(controller.dispose);
@@ -165,21 +228,26 @@ void main() {
             data: MediaQuery.of(context).copyWith(disableAnimations: true),
             child: child!,
           ),
-          home: SplashScreen(controller: controller),
+          home: StartScreen(controller: controller),
         ),
       );
-      await tester.pump(const Duration(milliseconds: 200));
-      expect(find.byType(SplashScreen), findsOneWidget);
+      await tester.pump(const Duration(seconds: 10));
+      expect(find.byType(StartScreen), findsOneWidget);
+      expect(find.byType(MenuScreen), findsNothing);
       expect(tester.hasRunningAnimations, isFalse);
-      await tester.pump(const Duration(milliseconds: 600));
+      await tester.ensureVisible(find.byKey(const Key('enter-store')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('enter-store')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
       expect(find.byType(MenuScreen), findsOneWidget);
-      expect(find.byType(SplashScreen), findsNothing);
+      expect(find.byTooltip('View cart').hitTestable(), findsOneWidget);
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets('Disposing an active splash cancels its animations', (
+  testWidgets('Disposing an active start screen cancels its animation', (
     tester,
   ) async {
     await tester.pumpWidget(const MiniShopApp());
@@ -190,45 +258,76 @@ void main() {
     expect(tester.hasRunningAnimations, isFalse);
   });
 
-  testWidgets('Splash fades away before the menu appears and accepts taps', (
-    tester,
-  ) async {
-    await tester.pumpWidget(const MiniShopApp());
-    await tester.pump(const Duration(milliseconds: 1800));
-    await tester.tap(find.byKey(const Key('skip-splash')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 220));
+  testWidgets(
+    'Material menu transition covers the start screen before enabling controls',
+    (tester) async {
+      await tester.pumpWidget(const MiniShopApp());
+      await tester.pump(const Duration(milliseconds: 1800));
+      await tester.ensureVisible(find.byKey(const Key('enter-store')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('enter-store')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(find.byType(StartScreen), findsOneWidget);
+      expect(find.byType(MenuScreen), findsOneWidget);
+      expect(
+        tester
+            .widget<Opacity>(find.byKey(const Key('splash-fade-cover')))
+            .opacity,
+        allOf(greaterThan(0), lessThan(1)),
+      );
+      expect(
+        tester.widget<Opacity>(find.byKey(const Key('menu-reveal'))).opacity,
+        0,
+      );
+      expect(find.byTooltip('View cart').hitTestable(), findsNothing);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        tester
+            .widget<Opacity>(find.byKey(const Key('splash-fade-cover')))
+            .opacity,
+        1,
+      );
+      expect(
+        tester.widget<Opacity>(find.byKey(const Key('menu-reveal'))).opacity,
+        allOf(greaterThan(0), lessThan(1)),
+      );
+      expect(find.byTooltip('View cart').hitTestable(), findsNothing);
+      await tester.pumpAndSettle();
+      expect(find.byType(StartScreen), findsNothing);
+      expect(find.byTooltip('View cart').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-    expect(find.byType(SplashScreen), findsOneWidget);
-    expect(find.byType(MenuScreen), findsOneWidget);
-    final cover = tester.widget<Opacity>(
-      find.byKey(const Key('splash-fade-cover')),
-    );
-    final menu = tester.widget<Opacity>(find.byKey(const Key('menu-reveal')));
-    expect(cover.opacity, allOf(greaterThan(0), lessThan(1)));
-    expect(menu.opacity, 0);
-    expect(find.byTooltip('View cart').hitTestable(), findsNothing);
-
-    await tester.pump(const Duration(milliseconds: 550));
-    expect(
-      tester
-          .widget<Opacity>(find.byKey(const Key('splash-fade-cover')))
-          .opacity,
-      1,
-    );
-    expect(
-      tester.widget<Opacity>(find.byKey(const Key('menu-reveal'))).opacity,
-      allOf(greaterThan(0), lessThan(1)),
-    );
-    expect(find.byTooltip('View cart').hitTestable(), findsNothing);
-
-    await tester.pumpAndSettle();
-    expect(find.byType(SplashScreen), findsNothing);
-    expect(find.byTooltip('View cart').hitTestable(), findsOneWidget);
-    expect(
-      Navigator.of(tester.element(find.byType(MenuScreen))).canPop(),
-      isFalse,
-    );
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'Start screen supports larger text with a reachable Shop Now button',
+    (tester) async {
+      final controller = ShopController(repository: const MenuRepository());
+      addTearDown(controller.dispose);
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.theme,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(1.6)),
+            child: child!,
+          ),
+          home: StartScreen(controller: controller),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('enter-store')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('enter-store')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

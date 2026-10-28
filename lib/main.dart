@@ -12,15 +12,9 @@ void main() {
 // FINAL PROJECT STARTER CODE
 // Customize this application based on your chosen e-commerce.
 //
-// IMPORTANT:
-// The required Start Screen is intentionally NOT included.
-// Create your own StartScreen and use Navigator.push() on a
-// button to open HomeScreen.
-//
-// After creating StartScreen, change:
-//   home: const HomeScreen(),
-// to:
-//   home: const StartScreen(),
+// The required StartScreen is implemented below. Its SHOP NOW
+// button opens MenuScreen using Navigator.push() and
+// MaterialPageRoute. All application code remains in this file.
 // ============================================================
 
 // ============================================================
@@ -50,6 +44,12 @@ abstract final class AppTheme {
     brightness: Brightness.light,
     visualDensity: VisualDensity.standard,
     fontFamily: 'Montserrat',
+    pageTransitionsTheme: PageTransitionsTheme(
+      builders: {
+        for (final platform in TargetPlatform.values)
+          platform: const _CafePageTransitionsBuilder(),
+      },
+    ),
     scaffoldBackgroundColor: AppColors.canvas,
     colorScheme: const ColorScheme.light(
       primary: AppColors.action,
@@ -140,6 +140,39 @@ TextStyle displayStyle(double size, {Color color = AppColors.ink}) => TextStyle(
   letterSpacing: -.8,
 );
 
+// Customize MaterialPageRoute transitions while keeping the required
+// Navigator.push() / MaterialPageRoute navigation flow.
+class _CafePageTransitionsBuilder extends PageTransitionsBuilder {
+  const _CafePageTransitionsBuilder();
+
+  @override
+  Duration get transitionDuration => StartScreen.transitionDuration;
+
+  @override
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 450);
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    if (route.settings.name == MenuScreen.routeName) {
+      return _MenuTransition(animation: animation, child: child);
+    }
+    return const FadeUpwardsPageTransitionsBuilder().buildTransitions(
+      route,
+      context,
+      animation,
+      secondaryAnimation,
+      child,
+    );
+  }
+}
+
 // ============================================================
 // PRODUCT AND CART MODELS
 // ============================================================
@@ -150,7 +183,7 @@ class Product {
     required this.name,
     required this.price,
     required this.category,
-    required this.group,
+    required this.subcategory,
     required this.description,
     required this.image,
     this.featured = false,
@@ -160,7 +193,7 @@ class Product {
   final String name;
   final int price;
   final String category;
-  final String group;
+  final String subcategory;
   final String description;
   final String image;
   final bool featured;
@@ -188,7 +221,7 @@ const cafeProducts = <Product>[
     name: "Tiramisu Latte",
     price: 145,
     category: "Coffee",
-    group: "Coffee",
+    subcategory: "Coffee",
     description: "Espresso-based latte with tiramisu-inspired cream. A little coffee, a little dessert, and a whole lot of comfort.",
     image: "assets/images/Tiramisu Latte 5.png",
     featured: true,
@@ -197,8 +230,8 @@ const cafeProducts = <Product>[
     id: "quarter-pounder-classic-burger",
     name: "Classic Burger",
     price: 110,
-    category: "Quarter Pounder",
-    group: "Food",
+    category: "Food",
+    subcategory: "Quarter Pounder",
     description: "A juicy quarter-pound patty with cheese and fresh veggies. Your comfort-food favorite, made to pair with a Smooch drink.",
     image: "assets/images/Classic Burger.png",
     featured: true,
@@ -207,8 +240,8 @@ const cafeProducts = <Product>[
     id: "brownies-chocolate-bliss",
     name: "Chocolate Bliss",
     price: 145,
-    category: "Brownies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Brownies",
     description: "A fudgy chocolate brownie with a rich, moist center. The perfect little companion to your favorite coffee.",
     image: "assets/images/Chocolate Bliss 2.png",
     featured: true,
@@ -218,7 +251,7 @@ const cafeProducts = <Product>[
     name: "Spanish Latte",
     price: 80,
     category: "Coffee",
-    group: "Coffee",
+    subcategory: "Coffee",
     description: "Espresso and milk with a sweet, creamy finish. A comforting coffee for slow afternoons.",
     image: "assets/images/Spanish Latte 5.png",
     featured: true,
@@ -228,7 +261,7 @@ const cafeProducts = <Product>[
     name: "Strawberry Matcha",
     price: 115,
     category: "Non-Coffee",
-    group: "Non-Coffee",
+    subcategory: "Non-Coffee",
     description: "Earthy matcha meets sweet strawberry and milk for a colorful sip of happiness.",
     image: "assets/images/Strawberry Matcha 1.png",
     featured: true,
@@ -237,8 +270,8 @@ const cafeProducts = <Product>[
     id: "cakes-basque-cheesecake",
     name: "Basque Cheesecake",
     price: 190,
-    category: "Cakes",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Cakes",
     description: "A sweet little moment from our cakes selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Basque Cheesecake 1.png",
     featured: true,
@@ -247,8 +280,8 @@ const cafeProducts = <Product>[
     id: "quarter-pounder-hawaiian-burger",
     name: "Hawaiian Burger",
     price: 125,
-    category: "Quarter Pounder",
-    group: "Food",
+    category: "Food",
+    subcategory: "Quarter Pounder",
     description: "A comforting pick from our quarter pounder menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Hawaiian Burger.png",
     featured: false,
@@ -257,8 +290,8 @@ const cafeProducts = <Product>[
     id: "quarter-pounder-sunrise-burger",
     name: "Sunrise Burger",
     price: 150,
-    category: "Quarter Pounder",
-    group: "Food",
+    category: "Food",
+    subcategory: "Quarter Pounder",
     description: "A comforting pick from our quarter pounder menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Sunrise Burger.png",
     featured: false,
@@ -267,8 +300,8 @@ const cafeProducts = <Product>[
     id: "quarter-pounder-bacon-cheese-burger",
     name: "Bacon Cheese Burger",
     price: 155,
-    category: "Quarter Pounder",
-    group: "Food",
+    category: "Food",
+    subcategory: "Quarter Pounder",
     description: "A comforting pick from our quarter pounder menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Bacon Cheese Burger.png",
     featured: false,
@@ -277,8 +310,8 @@ const cafeProducts = <Product>[
     id: "quarter-pounder-double-classic-burger",
     name: "Double Classic Burger",
     price: 180,
-    category: "Quarter Pounder",
-    group: "Food",
+    category: "Food",
+    subcategory: "Quarter Pounder",
     description: "A comforting pick from our quarter pounder menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Double Classic Burger.png",
     featured: false,
@@ -287,8 +320,8 @@ const cafeProducts = <Product>[
     id: "sandwiches-classic-chicken",
     name: "Classic Chicken",
     price: 110,
-    category: "Sandwiches",
-    group: "Food",
+    category: "Food",
+    subcategory: "Sandwiches",
     description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Classic Chicken Sandwich.png",
     featured: false,
@@ -297,8 +330,8 @@ const cafeProducts = <Product>[
     id: "sandwiches-club-house",
     name: "Club House",
     price: 185,
-    category: "Sandwiches",
-    group: "Food",
+    category: "Food",
+    subcategory: "Sandwiches",
     description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Club House Sandwich.png",
     featured: false,
@@ -307,8 +340,8 @@ const cafeProducts = <Product>[
     id: "sandwiches-grilled-cheese",
     name: "Grilled Cheese",
     price: 110,
-    category: "Sandwiches",
-    group: "Food",
+    category: "Food",
+    subcategory: "Sandwiches",
     description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Grilled Cheese Sandwich.png",
     featured: false,
@@ -317,8 +350,8 @@ const cafeProducts = <Product>[
     id: "sandwiches-grilled-ham-cheese",
     name: "Grilled Ham & Cheese",
     price: 100,
-    category: "Sandwiches",
-    group: "Food",
+    category: "Food",
+    subcategory: "Sandwiches",
     description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Grilled Ham & Cheese Sandwich.png",
     featured: false,
@@ -327,8 +360,8 @@ const cafeProducts = <Product>[
     id: "sandwiches-tuna-sandwich",
     name: "Tuna Sandwich",
     price: 125,
-    category: "Sandwiches",
-    group: "Food",
+    category: "Food",
+    subcategory: "Sandwiches",
     description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Tuna Sandwich.png",
     featured: false,
@@ -337,8 +370,8 @@ const cafeProducts = <Product>[
     id: "sandwiches-chicken-sandwich",
     name: "Chicken Sandwich",
     price: 130,
-    category: "Sandwiches",
-    group: "Food",
+    category: "Food",
+    subcategory: "Sandwiches",
     description: "A comforting pick from our sandwiches menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Chicken Sandwich.png",
     featured: false,
@@ -347,8 +380,8 @@ const cafeProducts = <Product>[
     id: "quesadilla-cheese-quesadilla",
     name: "Cheese Quesadilla",
     price: 115,
-    category: "Quesadilla",
-    group: "Food",
+    category: "Food",
+    subcategory: "Quesadilla",
     description: "A comforting pick from our quesadilla menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Cheese Quesadilla.png",
     featured: false,
@@ -357,8 +390,8 @@ const cafeProducts = <Product>[
     id: "quesadilla-bacon-quesadilla",
     name: "Bacon Quesadilla",
     price: 145,
-    category: "Quesadilla",
-    group: "Food",
+    category: "Food",
+    subcategory: "Quesadilla",
     description: "A comforting pick from our quesadilla menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Bacon Quesadilla.png",
     featured: false,
@@ -367,8 +400,8 @@ const cafeProducts = <Product>[
     id: "quesadilla-chicken-quesadilla",
     name: "Chicken Quesadilla",
     price: 150,
-    category: "Quesadilla",
-    group: "Food",
+    category: "Food",
+    subcategory: "Quesadilla",
     description: "A comforting pick from our quesadilla menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Chicken Quesadilla.png",
     featured: false,
@@ -377,8 +410,8 @@ const cafeProducts = <Product>[
     id: "quesadilla-tapa-quesadilla",
     name: "Tapa Quesadilla",
     price: 160,
-    category: "Quesadilla",
-    group: "Food",
+    category: "Food",
+    subcategory: "Quesadilla",
     description: "A comforting pick from our quesadilla menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Tapa Quesadilla.png",
     featured: false,
@@ -387,8 +420,8 @@ const cafeProducts = <Product>[
     id: "french-fries-plain-fries",
     name: "Plain Fries",
     price: 30,
-    category: "French Fries",
-    group: "Food",
+    category: "Food",
+    subcategory: "French Fries",
     description: "A comforting pick from our french fries menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Plain Fries.png",
     featured: false,
@@ -397,8 +430,8 @@ const cafeProducts = <Product>[
     id: "french-fries-bbq-fries",
     name: "BBQ Fries",
     price: 30,
-    category: "French Fries",
-    group: "Food",
+    category: "Food",
+    subcategory: "French Fries",
     description: "A comforting pick from our french fries menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/BBQ Fries.png",
     featured: false,
@@ -407,8 +440,8 @@ const cafeProducts = <Product>[
     id: "french-fries-cheese-fries",
     name: "Cheese Fries",
     price: 30,
-    category: "French Fries",
-    group: "Food",
+    category: "Food",
+    subcategory: "French Fries",
     description: "A comforting pick from our french fries menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Cheese Fries.png",
     featured: false,
@@ -417,8 +450,8 @@ const cafeProducts = <Product>[
     id: "french-fries-sour-cream-fries",
     name: "Sour Cream Fries",
     price: 30,
-    category: "French Fries",
-    group: "Food",
+    category: "Food",
+    subcategory: "French Fries",
     description: "A comforting pick from our french fries menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Sour Cream Fries.png",
     featured: false,
@@ -427,8 +460,8 @@ const cafeProducts = <Product>[
     id: "rice-bowls-longganisa",
     name: "Longganisa",
     price: 110,
-    category: "Rice Bowls",
-    group: "Food",
+    category: "Food",
+    subcategory: "Rice Bowls",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Longanisa Rice Bowl.png",
     featured: false,
@@ -437,8 +470,8 @@ const cafeProducts = <Product>[
     id: "rice-bowls-bacon",
     name: "Bacon",
     price: 115,
-    category: "Rice Bowls",
-    group: "Food",
+    category: "Food",
+    subcategory: "Rice Bowls",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Bacon Rice Bowl.png",
     featured: false,
@@ -447,8 +480,8 @@ const cafeProducts = <Product>[
     id: "rice-bowls-sisig",
     name: "Sisig",
     price: 130,
-    category: "Rice Bowls",
-    group: "Food",
+    category: "Food",
+    subcategory: "Rice Bowls",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Sisig Rice Bowl.png",
     featured: false,
@@ -457,8 +490,8 @@ const cafeProducts = <Product>[
     id: "rice-bowls-chicken-steak",
     name: "Chicken Steak",
     price: 130,
-    category: "Rice Bowls",
-    group: "Food",
+    category: "Food",
+    subcategory: "Rice Bowls",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Chicken Steak Rice Bowl.png",
     featured: false,
@@ -467,8 +500,8 @@ const cafeProducts = <Product>[
     id: "rice-bowls-burger-steak",
     name: "Burger Steak",
     price: 130,
-    category: "Rice Bowls",
-    group: "Food",
+    category: "Food",
+    subcategory: "Rice Bowls",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Burger Steak Rice Bowl .png",
     featured: false,
@@ -477,8 +510,8 @@ const cafeProducts = <Product>[
     id: "rice-bowls-beef-tapa",
     name: "Beef Tapa",
     price: 140,
-    category: "Rice Bowls",
-    group: "Food",
+    category: "Food",
+    subcategory: "Rice Bowls",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Beef Tapa Rice Bowl.png",
     featured: false,
@@ -487,8 +520,8 @@ const cafeProducts = <Product>[
     id: "rice-bowls-savory-tapa",
     name: "Savory Tapa",
     price: 145,
-    category: "Rice Bowls",
-    group: "Food",
+    category: "Food",
+    subcategory: "Rice Bowls",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Savory Tapa Rice Bowl.png",
     featured: false,
@@ -497,8 +530,8 @@ const cafeProducts = <Product>[
     id: "rice-bowls-chicken-bbq",
     name: "Chicken BBQ",
     price: 125,
-    category: "Rice Bowls",
-    group: "Food",
+    category: "Food",
+    subcategory: "Rice Bowls",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Chicken BBQ Rice Bowl.png",
     featured: false,
@@ -507,8 +540,8 @@ const cafeProducts = <Product>[
     id: "rice-bowls-chicken-teriyaki",
     name: "Chicken Teriyaki",
     price: 125,
-    category: "Rice Bowls",
-    group: "Food",
+    category: "Food",
+    subcategory: "Rice Bowls",
     description: "A comforting pick from our rice bowls menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Chicken Teriyaki Rice Bowl.png",
     featured: false,
@@ -517,8 +550,8 @@ const cafeProducts = <Product>[
     id: "pasta-lasagna",
     name: "Lasagna",
     price: 130,
-    category: "Pasta",
-    group: "Food",
+    category: "Food",
+    subcategory: "Pasta",
     description: "A comforting pick from our pasta menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Lasagana 1.png",
     featured: false,
@@ -527,8 +560,8 @@ const cafeProducts = <Product>[
     id: "pasta-carbonara",
     name: "Carbonara",
     price: 115,
-    category: "Pasta",
-    group: "Food",
+    category: "Food",
+    subcategory: "Pasta",
     description: "A comforting pick from our pasta menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Carbonara 1.png",
     featured: false,
@@ -537,8 +570,8 @@ const cafeProducts = <Product>[
     id: "pasta-spaghetti-bolognese",
     name: "Spaghetti Bolognese",
     price: 115,
-    category: "Pasta",
-    group: "Food",
+    category: "Food",
+    subcategory: "Pasta",
     description: "A comforting pick from our pasta menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Spaghetti Bolognese 1.png",
     featured: false,
@@ -547,8 +580,8 @@ const cafeProducts = <Product>[
     id: "nachos-beef-nachos",
     name: "Beef Nachos",
     price: 130,
-    category: "Nachos",
-    group: "Food",
+    category: "Food",
+    subcategory: "Nachos",
     description: "A comforting pick from our nachos menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Beef Nachos 1.png",
     featured: false,
@@ -557,8 +590,8 @@ const cafeProducts = <Product>[
     id: "nachos-nacho-fries",
     name: "Nacho Fries",
     price: 155,
-    category: "Nachos",
-    group: "Food",
+    category: "Food",
+    subcategory: "Nachos",
     description: "A comforting pick from our nachos menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Nacho Fries 1.png",
     featured: false,
@@ -567,8 +600,8 @@ const cafeProducts = <Product>[
     id: "nachos-cheesy-bacon-fries",
     name: "Cheesy Bacon Fries",
     price: 155,
-    category: "Nachos",
-    group: "Food",
+    category: "Food",
+    subcategory: "Nachos",
     description: "A comforting pick from our nachos menu. Pair it with your favorite handcrafted drink.",
     image: "assets/images/Cheesy Bacon Fries 1.png",
     featured: false,
@@ -577,8 +610,8 @@ const cafeProducts = <Product>[
     id: "brownies-caramel-treat",
     name: "Caramel Treat",
     price: 54,
-    category: "Brownies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Brownies",
     description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Caramel Treat 2.png",
     featured: false,
@@ -587,8 +620,8 @@ const cafeProducts = <Product>[
     id: "brownies-brookies",
     name: "Brookies",
     price: 56,
-    category: "Brownies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Brownies",
     description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Brookies 1.png",
     featured: false,
@@ -597,8 +630,8 @@ const cafeProducts = <Product>[
     id: "brownies-revel-bar",
     name: "Revel Bar",
     price: 60,
-    category: "Brownies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Brownies",
     description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Revel Bar 1.png",
     featured: false,
@@ -607,8 +640,8 @@ const cafeProducts = <Product>[
     id: "brownies-velvet-swirl-bar",
     name: "Velvet Swirl Bar",
     price: 88,
-    category: "Brownies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Brownies",
     description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Velvet Swirl Bar 1.png",
     featured: false,
@@ -617,8 +650,8 @@ const cafeProducts = <Product>[
     id: "brownies-biscoff-blondies",
     name: "Biscoff Blondies",
     price: 50,
-    category: "Brownies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Brownies",
     description: "A sweet little moment from our brownies selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Biscoff Blandies 1.png",
     featured: false,
@@ -627,8 +660,8 @@ const cafeProducts = <Product>[
     id: "cookies-og-cookies",
     name: "OG Cookies",
     price: 40,
-    category: "Cookies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Cookies",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/OG Chookies 1.png",
     featured: false,
@@ -637,8 +670,8 @@ const cafeProducts = <Product>[
     id: "cookies-choco-walnut-cookies",
     name: "Choco Walnut Cookies",
     price: 45,
-    category: "Cookies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Cookies",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Choco Walnut Cookies 1.png",
     featured: false,
@@ -647,8 +680,8 @@ const cafeProducts = <Product>[
     id: "cookies-chocotrio-cookies",
     name: "Chocotrio Cookies",
     price: 48,
-    category: "Cookies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Cookies",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Chocotrio Cookies 1.png",
     featured: false,
@@ -657,8 +690,8 @@ const cafeProducts = <Product>[
     id: "cookies-lotus-cookies",
     name: "Lotus Cookies",
     price: 60,
-    category: "Cookies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Cookies",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Lotus Cookies 1.png",
     featured: false,
@@ -667,8 +700,8 @@ const cafeProducts = <Product>[
     id: "cookies-velvet-cookies",
     name: "Velvet Cookies",
     price: 60,
-    category: "Cookies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Cookies",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Velve Cookies 1.png",
     featured: false,
@@ -677,8 +710,8 @@ const cafeProducts = <Product>[
     id: "cookies-hershey-s-crinkles",
     name: "Hershey's Crinkles",
     price: 45,
-    category: "Cookies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Cookies",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Hershey's Crinkles 1.png",
     featured: false,
@@ -687,8 +720,8 @@ const cafeProducts = <Product>[
     id: "cookies-mini-cookies-4pcs",
     name: "Mini Cookies 4pcs",
     price: 35,
-    category: "Cookies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Cookies",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/4 pcs 1.png",
     featured: false,
@@ -697,8 +730,8 @@ const cafeProducts = <Product>[
     id: "cookies-mini-cookies-9pcs",
     name: "Mini Cookies 9pcs",
     price: 75,
-    category: "Cookies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Cookies",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/9 PCS 1.png",
     featured: false,
@@ -707,8 +740,8 @@ const cafeProducts = <Product>[
     id: "cookies-mini-cookies-16pcs",
     name: "Mini Cookies 16pcs",
     price: 130,
-    category: "Cookies",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Cookies",
     description: "A sweet little moment from our cookies selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/16 pcs 1.png",
     featured: false,
@@ -717,8 +750,8 @@ const cafeProducts = <Product>[
     id: "muffins-choco-chip-muffin",
     name: "Choco Chip Muffin",
     price: 75,
-    category: "Muffins",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Muffins",
     description: "A sweet little moment from our muffins selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Choco Chip Muffin 1.png",
     featured: false,
@@ -727,8 +760,8 @@ const cafeProducts = <Product>[
     id: "muffins-dark-choco-muffin",
     name: "Dark Choco Muffin",
     price: 75,
-    category: "Muffins",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Muffins",
     description: "A sweet little moment from our muffins selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Dark Choco Muffin 1.png",
     featured: false,
@@ -737,8 +770,8 @@ const cafeProducts = <Product>[
     id: "cakes-moist-chocolate-cake",
     name: "Moist Chocolate Cake",
     price: 100,
-    category: "Cakes",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Cakes",
     description: "A sweet little moment from our cakes selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Moist Chocolate Cake 1.png",
     featured: false,
@@ -747,8 +780,8 @@ const cafeProducts = <Product>[
     id: "cakes-no-bake-cheesecake",
     name: "No Bake Cheesecake",
     price: 170,
-    category: "Cakes",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Cakes",
     description: "A sweet little moment from our cakes selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/No Bake Cheesecake 2.png",
     featured: false,
@@ -757,8 +790,8 @@ const cafeProducts = <Product>[
     id: "cakes-tiramisu",
     name: "Tiramisu",
     price: 180,
-    category: "Cakes",
-    group: "Pastries",
+    category: "Pastries",
+    subcategory: "Cakes",
     description: "A sweet little moment from our cakes selection. Enjoy it with a hot or iced coffee.",
     image: "assets/images/Tiramisu 1.png",
     featured: false,
@@ -768,7 +801,7 @@ const cafeProducts = <Product>[
     name: "Americano",
     price: 60,
     category: "Coffee",
-    group: "Coffee",
+    subcategory: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
     image: "assets/images/Americano 3.png",
     featured: false,
@@ -778,7 +811,7 @@ const cafeProducts = <Product>[
     name: "Latte",
     price: 70,
     category: "Coffee",
-    group: "Coffee",
+    subcategory: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
     image: "assets/images/Latte 5.png",
     featured: false,
@@ -788,7 +821,7 @@ const cafeProducts = <Product>[
     name: "French Vanilla Latte",
     price: 75,
     category: "Coffee",
-    group: "Coffee",
+    subcategory: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
     image: "assets/images/French Vanilla Latte 5.png",
     featured: false,
@@ -798,7 +831,7 @@ const cafeProducts = <Product>[
     name: "Mocha Latte",
     price: 100,
     category: "Coffee",
-    group: "Coffee",
+    subcategory: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
     image: "assets/images/Mocha Latte 5.png",
     featured: false,
@@ -808,7 +841,7 @@ const cafeProducts = <Product>[
     name: "White Mocha Latte",
     price: 90,
     category: "Coffee",
-    group: "Coffee",
+    subcategory: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
     image: "assets/images/White Mocha Latte 5.png",
     featured: false,
@@ -818,7 +851,7 @@ const cafeProducts = <Product>[
     name: "Caramel Macchiato",
     price: 95,
     category: "Coffee",
-    group: "Coffee",
+    subcategory: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
     image: "assets/images/Caramel Macchiato 5.png",
     featured: false,
@@ -828,7 +861,7 @@ const cafeProducts = <Product>[
     name: "Choco Hazelnut Latte",
     price: 95,
     category: "Coffee",
-    group: "Coffee",
+    subcategory: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
     image: "assets/images/Choco Hazelnut Latte 5.png",
     featured: false,
@@ -838,7 +871,7 @@ const cafeProducts = <Product>[
     name: "Creamy Americano",
     price: 95,
     category: "Coffee",
-    group: "Coffee",
+    subcategory: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
     image: "assets/images/Creamy Americano 5.png",
     featured: false,
@@ -848,7 +881,7 @@ const cafeProducts = <Product>[
     name: "Vanilla Ice Cream Latte",
     price: 100,
     category: "Coffee",
-    group: "Coffee",
+    subcategory: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
     image: "assets/images/Vanilla Ice Cream Latte 5.png",
     featured: false,
@@ -858,7 +891,7 @@ const cafeProducts = <Product>[
     name: "Dirty Matcha Latte",
     price: 115,
     category: "Coffee",
-    group: "Coffee",
+    subcategory: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
     image: "assets/images/Dirty Matcha Latte 5.png",
     featured: false,
@@ -868,7 +901,7 @@ const cafeProducts = <Product>[
     name: "Dirty Ube Latte",
     price: 85,
     category: "Coffee",
-    group: "Coffee",
+    subcategory: "Coffee",
     description: "Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.",
     image: "assets/images/Dirty Ube Latte 5.png",
     featured: false,
@@ -878,7 +911,7 @@ const cafeProducts = <Product>[
     name: "Chocolate",
     price: 195,
     category: "Non-Coffee",
-    group: "Non-Coffee",
+    subcategory: "Non-Coffee",
     description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
     image: "assets/images/Chocolate 1.png",
     featured: false,
@@ -888,7 +921,7 @@ const cafeProducts = <Product>[
     name: "Strawberry Latte",
     price: 85,
     category: "Non-Coffee",
-    group: "Non-Coffee",
+    subcategory: "Non-Coffee",
     description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
     image: "assets/images/Strawberry Latte 1.png",
     featured: false,
@@ -898,7 +931,7 @@ const cafeProducts = <Product>[
     name: "Matcha Latte",
     price: 105,
     category: "Non-Coffee",
-    group: "Non-Coffee",
+    subcategory: "Non-Coffee",
     description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
     image: "assets/images/Matcha Latte 1.png",
     featured: false,
@@ -908,7 +941,7 @@ const cafeProducts = <Product>[
     name: "Ube Latte",
     price: 75,
     category: "Non-Coffee",
-    group: "Non-Coffee",
+    subcategory: "Non-Coffee",
     description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
     image: "assets/images/Ube Latte 1.png",
     featured: false,
@@ -918,7 +951,7 @@ const cafeProducts = <Product>[
     name: "Ube Matcha",
     price: 105,
     category: "Non-Coffee",
-    group: "Non-Coffee",
+    subcategory: "Non-Coffee",
     description: "Skip the espresso and find a little happiness in our non-coffee drink selection.",
     image: "assets/images/Ube Matcha.png",
     featured: false,
@@ -928,7 +961,7 @@ const cafeProducts = <Product>[
     name: "Mocha",
     price: 125,
     category: "Ice Blended",
-    group: "Ice Blended",
+    subcategory: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
     image: "assets/images/Mocha 6.png",
     featured: false,
@@ -938,7 +971,7 @@ const cafeProducts = <Product>[
     name: "White Mocha",
     price: 115,
     category: "Ice Blended",
-    group: "Ice Blended",
+    subcategory: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
     image: "assets/images/White Mocha 6.png",
     featured: false,
@@ -948,7 +981,7 @@ const cafeProducts = <Product>[
     name: "Caramel Macchiato",
     price: 120,
     category: "Ice Blended",
-    group: "Ice Blended",
+    subcategory: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
     image: "assets/images/Caramel Macchiato 7.png",
     featured: false,
@@ -958,7 +991,7 @@ const cafeProducts = <Product>[
     name: "Choco Hazelnut",
     price: 135,
     category: "Ice Blended",
-    group: "Ice Blended",
+    subcategory: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
     image: "assets/images/Choco Hazelnut 7.png",
     featured: false,
@@ -968,7 +1001,7 @@ const cafeProducts = <Product>[
     name: "Chocolate",
     price: 125,
     category: "Ice Blended",
-    group: "Ice Blended",
+    subcategory: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
     image: "assets/images/Chocolate 5.png",
     featured: false,
@@ -978,7 +1011,7 @@ const cafeProducts = <Product>[
     name: "Strawberry",
     price: 110,
     category: "Ice Blended",
-    group: "Ice Blended",
+    subcategory: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
     image: "assets/images/Strawberry 6.png",
     featured: false,
@@ -988,7 +1021,7 @@ const cafeProducts = <Product>[
     name: "Matcha",
     price: 115,
     category: "Ice Blended",
-    group: "Ice Blended",
+    subcategory: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
     image: "assets/images/Matcha 4.png",
     featured: false,
@@ -998,7 +1031,7 @@ const cafeProducts = <Product>[
     name: "Ube",
     price: 100,
     category: "Ice Blended",
-    group: "Ice Blended",
+    subcategory: "Ice Blended",
     description: "A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.",
     image: "assets/images/Ube 2.png",
     featured: false,
@@ -1007,8 +1040,8 @@ const cafeProducts = <Product>[
     id: "lava-series-chocolate-lava",
     name: "Chocolate Lava",
     price: 110,
-    category: "Lava Series",
-    group: "More Drinks",
+    category: "More Drinks",
+    subcategory: "Lava Series",
     description: "A refreshing little break from our lava series selection. A delicious way to complete your order.",
     image: "assets/images/Chocolate Lava 5.png",
     featured: false,
@@ -1017,8 +1050,8 @@ const cafeProducts = <Product>[
     id: "lava-series-strawberry-lava",
     name: "Strawberry Lava",
     price: 135,
-    category: "Lava Series",
-    group: "More Drinks",
+    category: "More Drinks",
+    subcategory: "Lava Series",
     description: "A refreshing little break from our lava series selection. A delicious way to complete your order.",
     image: "assets/images/Strawberry Lava 5.png",
     featured: false,
@@ -1027,8 +1060,8 @@ const cafeProducts = <Product>[
     id: "lava-series-ube-lava",
     name: "Ube Lava",
     price: 125,
-    category: "Lava Series",
-    group: "More Drinks",
+    category: "More Drinks",
+    subcategory: "Lava Series",
     description: "A refreshing little break from our lava series selection. A delicious way to complete your order.",
     image: "assets/images/Ube Lava 5.png",
     featured: false,
@@ -1037,8 +1070,8 @@ const cafeProducts = <Product>[
     id: "lava-series-matcha-lava",
     name: "Matcha Lava",
     price: 155,
-    category: "Lava Series",
-    group: "More Drinks",
+    category: "More Drinks",
+    subcategory: "Lava Series",
     description: "A refreshing little break from our lava series selection. A delicious way to complete your order.",
     image: "assets/images/Matcha Lava 5.png",
     featured: false,
@@ -1047,8 +1080,8 @@ const cafeProducts = <Product>[
     id: "chilled-drinks-bottled-water",
     name: "Bottled Water",
     price: 12,
-    category: "Chilled Drinks",
-    group: "More Drinks",
+    category: "More Drinks",
+    subcategory: "Chilled Drinks",
     description: "A refreshing little break from our chilled drinks selection. A delicious way to complete your order.",
     image: "assets/images/Bottled Water 1.png",
     featured: false,
@@ -1057,8 +1090,8 @@ const cafeProducts = <Product>[
     id: "chilled-drinks-calamansi-juice",
     name: "Calamansi Juice",
     price: 38,
-    category: "Chilled Drinks",
-    group: "More Drinks",
+    category: "More Drinks",
+    subcategory: "Chilled Drinks",
     description: "A refreshing little break from our chilled drinks selection. A delicious way to complete your order.",
     image: "assets/images/Calamansi juice 1.png",
     featured: false,
@@ -1067,8 +1100,8 @@ const cafeProducts = <Product>[
     id: "chilled-drinks-healthtea",
     name: "Healthtea",
     price: 15,
-    category: "Chilled Drinks",
-    group: "More Drinks",
+    category: "More Drinks",
+    subcategory: "Chilled Drinks",
     description: "A refreshing little break from our chilled drinks selection. A delicious way to complete your order.",
     image: "assets/images/Healthtea 1.png",
     featured: false,
@@ -1077,8 +1110,8 @@ const cafeProducts = <Product>[
     id: "chilled-drinks-healthtea-float",
     name: "Healthtea Float",
     price: 55,
-    category: "Chilled Drinks",
-    group: "More Drinks",
+    category: "More Drinks",
+    subcategory: "Chilled Drinks",
     description: "A refreshing little break from our chilled drinks selection. A delicious way to complete your order.",
     image: "assets/images/Healthea Float 2.png",
     featured: false,
@@ -1087,8 +1120,8 @@ const cafeProducts = <Product>[
     id: "dessert-affogato",
     name: "Affogato",
     price: 65,
-    category: "Dessert",
-    group: "More Drinks",
+    category: "More Drinks",
+    subcategory: "Dessert",
     description: "A refreshing little break from our dessert selection. A delicious way to complete your order.",
     image: "assets/images/Affogato 4.png",
     featured: false,
@@ -1097,8 +1130,8 @@ const cafeProducts = <Product>[
     id: "dessert-matcha-affogato",
     name: "Matcha Affogato",
     price: 85,
-    category: "Dessert",
-    group: "More Drinks",
+    category: "More Drinks",
+    subcategory: "Dessert",
     description: "A refreshing little break from our dessert selection. A delicious way to complete your order.",
     image: "assets/images/Matcha Affogato 2.png",
     featured: false,
@@ -1154,7 +1187,8 @@ class ShopController extends ChangeNotifier {
   List<Product> get products => repository.products;
   List<Product> get filteredProducts {
     final matches = products.where((product) {
-      final matchesCategory = _category == 'All' || product.group == _category;
+      final matchesCategory =
+          _category == 'All' || product.category == _category;
       return matchesCategory && _matchesQuery(product);
     }).toList();
     switch (_sort) {
@@ -1173,7 +1207,7 @@ class ShopController extends ChangeNotifier {
   }
 
   bool _matchesQuery(Product product) {
-    final text = '${product.name} ${product.category} ${product.group}'
+    final text = '${product.name} ${product.category} ${product.subcategory}'
         .toLowerCase();
     final words = _query.trim().toLowerCase().split(RegExp(r'\s+'));
     return words.every(text.contains);
@@ -1264,7 +1298,7 @@ class _MiniShopAppState extends State<MiniShopApp> {
     title: 'Smooch Cafe',
     debugShowCheckedModeBanner: false,
     theme: AppTheme.theme,
-    home: SplashScreen(controller: controller),
+    home: StartScreen(controller: controller),
   );
 }
 
@@ -1452,44 +1486,31 @@ class EmptyState extends StatelessWidget {
 // ============================================================
 // 3D SPLASH SCREEN AND MENU TRANSITION
 // ============================================================
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({
-    super.key,
-    required this.controller,
-    this.autoNavigate = true,
-  });
+class StartScreen extends StatefulWidget {
+  const StartScreen({super.key, required this.controller});
 
   final ShopController controller;
-  final bool autoNavigate;
   static const duration = Duration(milliseconds: 4600);
-  static const transitionDuration = Duration(milliseconds: 1100);
+  static const transitionDuration = Duration(milliseconds: 600);
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  State<StartScreen> createState() => _StartScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _StartScreenState extends State<StartScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _animation;
-  Timer? _reducedMotionTimer;
   bool? _reducedMotion;
   bool _leaving = false;
 
   @override
   void initState() {
     super.initState();
-    _animation =
-        AnimationController(
-          vsync: this,
-          duration: SplashScreen.duration,
-          animationBehavior: AnimationBehavior.preserve,
-        )..addStatusListener((status) {
-          if (status == AnimationStatus.completed &&
-              _reducedMotion == false &&
-              widget.autoNavigate) {
-            _openMenu();
-          }
-        });
+    _animation = AnimationController(
+      vsync: this,
+      duration: StartScreen.duration,
+      animationBehavior: AnimationBehavior.preserve,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       // Decode the initial menu images while the intro is playing.
@@ -1507,46 +1528,40 @@ class _SplashScreenState extends State<SplashScreen>
   void didChangeDependencies() {
     super.didChangeDependencies();
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    if (_reducedMotion == reduceMotion || _leaving) return;
+    if (_reducedMotion == reduceMotion) return;
     _reducedMotion = reduceMotion;
-    _reducedMotionTimer?.cancel();
     if (reduceMotion) {
       _animation.stop();
       _animation.value = 1;
-      if (widget.autoNavigate) {
-        _reducedMotionTimer = Timer(
-          const Duration(milliseconds: 700),
-          _openMenu,
-        );
-      }
-    } else {
+    } else if (!_leaving) {
       _animation.forward(from: 0);
     }
   }
 
-  void _openMenu() {
+  Future<void> _openMenu() async {
     if (!mounted || _leaving) return;
-    _leaving = true;
-    _reducedMotionTimer?.cancel();
+    setState(() => _leaving = true);
     _animation.stop();
-    Navigator.of(context).pushReplacement<void, void>(
-      PageRouteBuilder<void>(
-        transitionDuration: _reducedMotion == true
-            ? Duration.zero
-            : SplashScreen.transitionDuration,
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            MenuScreen(controller: widget.controller),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          if (_reducedMotion == true) return child;
-          return _MenuTransition(animation: animation, child: child);
-        },
-      ),
-    );
+    try {
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          settings: const RouteSettings(name: MenuScreen.routeName),
+          builder: (_) => MenuScreen(controller: widget.controller),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _leaving = false);
+        if (_reducedMotion == false && !_animation.isCompleted) {
+          _animation.forward();
+        }
+      }
+    }
   }
 
   @override
   void dispose() {
-    _reducedMotionTimer?.cancel();
     _animation.dispose();
     super.dispose();
   }
@@ -1600,31 +1615,13 @@ class _SplashScreenState extends State<SplashScreen>
                                 const SizedBox(width: 8),
                                 const Expanded(
                                   child: Text(
-                                    'A LITTLE SMOOCH',
+                                    'SMOOCH CAFE',
                                     style: TextStyle(
                                       fontSize: 9,
                                       letterSpacing: 1.6,
                                       color: AppColors.muted,
                                       fontWeight: FontWeight.w600,
                                     ),
-                                  ),
-                                ),
-                                TextButton(
-                                  key: const Key('skip-splash'),
-                                  onPressed: _openMenu,
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: AppColors.muted,
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        'Skip intro',
-                                        style: TextStyle(fontSize: 11),
-                                      ),
-                                      SizedBox(width: 6),
-                                      Icon(Icons.arrow_forward, size: 15),
-                                    ],
                                   ),
                                 ),
                               ],
@@ -1685,7 +1682,7 @@ class _SplashScreenState extends State<SplashScreen>
                                       ),
                                       const SizedBox(height: 15),
                                       const Text(
-                                        'Your daily dose of happy is on its way.',
+                                        'Your daily dose of happy starts here.',
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
                                           fontSize: 12,
@@ -1706,18 +1703,22 @@ class _SplashScreenState extends State<SplashScreen>
                             ),
                             child: Column(
                               children: [
-                                SizedBox(
-                                  width: 128,
-                                  child: LinearProgressIndicator(
-                                    value: progress,
-                                    semanticsLabel:
-                                        'Opening the Smooch Cafe menu',
-                                    color: AppColors.coral,
-                                    backgroundColor: AppColors.white.withValues(
-                                      alpha: .12,
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 360,
+                                  ),
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton.icon(
+                                      key: const Key('enter-store'),
+                                      onPressed: _leaving ? null : _openMenu,
+                                      iconAlignment: IconAlignment.end,
+                                      icon: const Icon(Icons.arrow_forward),
+                                      label: const Text('SHOP NOW'),
+                                      style: FilledButton.styleFrom(
+                                        minimumSize: const Size(48, 56),
+                                      ),
                                     ),
-                                    borderRadius: BorderRadius.circular(4),
-                                    minHeight: 3,
                                   ),
                                 ),
                                 const SizedBox(height: 17),
@@ -1759,7 +1760,7 @@ class _MenuTransition extends StatelessWidget {
     child: RepaintBoundary(child: child),
     builder: (context, menu) {
       // Finish covering the splash before the menu appears, avoiding ghosted
-      // cup/text over the product grid during the route replacement.
+      // cup/text over the product grid during the MaterialPageRoute transition.
       final cover = const Interval(
         0,
         .4,
@@ -1803,6 +1804,7 @@ class _MenuTransition extends StatelessWidget {
 // ============================================================
 class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key, required this.controller});
+  static const routeName = '/menu';
   final ShopController controller;
 
   @override
@@ -1879,6 +1881,17 @@ class _MenuScreenState extends State<MenuScreen> {
                 padding: EdgeInsets.symmetric(horizontal: padding),
                 child: Row(
                   children: [
+                    if (Navigator.of(context).canPop()) ...[
+                      IconButton(
+                        tooltip: 'Back to start',
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(
+                          Icons.arrow_back,
+                          color: AppColors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     const BrandLogo(width: 112),
                     const Spacer(),
                     if (wide) ...[
@@ -2703,7 +2716,7 @@ class ProductCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    product.category,
+                    product.subcategory,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -2831,7 +2844,9 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       children: [
                         Row(
                           children: [
-                            Expanded(child: Eyebrow(widget.product.category)),
+                            Expanded(
+                              child: Eyebrow(widget.product.subcategory),
+                            ),
                             ListenableBuilder(
                               listenable: widget.controller,
                               builder: (context, _) => IconButton(
@@ -3185,7 +3200,7 @@ class _CartRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        item.product.category.toUpperCase(),
+                        item.product.subcategory.toUpperCase(),
                         style: const TextStyle(
                           color: AppColors.secondaryText,
                           fontSize: 11,
@@ -3798,12 +3813,11 @@ class _Surface {
 // ============================================================
 // WIDGET PREVIEWS
 // ============================================================
-@Preview(name: 'Animated splash / phone', size: Size(390, 844))
-@Preview(name: 'Animated splash / desktop', size: Size(1440, 900))
+@Preview(name: '3D start screen / phone', size: Size(390, 844))
+@Preview(name: '3D start screen / desktop', size: Size(1440, 900))
 Widget splashPreview() => MaterialApp(
   theme: AppTheme.theme,
-  home: SplashScreen(
-    autoNavigate: false,
+  home: StartScreen(
     controller: ShopController(repository: const MenuRepository()),
   ),
 );

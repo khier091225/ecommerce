@@ -17,7 +17,8 @@ void main() {
       for (final product in shop.products) {
         expect(product.price, greaterThan(0), reason: product.name);
         expect(File(product.image).existsSync(), isTrue, reason: product.image);
-        expect(ShopController.categories, contains(product.group));
+        expect(ShopController.categories, contains(product.category));
+        expect(product.subcategory, isNotEmpty);
       }
     },
   );
@@ -29,7 +30,7 @@ void main() {
       expect(shop.filteredProducts, isNotEmpty);
       shop.selectCategory('Coffee');
       expect(
-        shop.filteredProducts.every((product) => product.group == 'Coffee'),
+        shop.filteredProducts.every((product) => product.category == 'Coffee'),
         isTrue,
       );
       shop.selectCategory('Food');
@@ -71,13 +72,46 @@ void main() {
     expect(shop.favorites, isEmpty);
   });
 
+  test('Every category filters the expected products and preserves subcategory search', () {
+    const expectedCounts = {
+      'Coffee': 13,
+      'Non-Coffee': 6,
+      'Food': 34,
+      'Pastries': 21,
+      'Ice Blended': 8,
+      'More Drinks': 10,
+    };
+    for (final entry in expectedCounts.entries) {
+      shop.selectCategory(entry.key);
+      expect(shop.filteredProducts, hasLength(entry.value));
+      expect(
+        shop.filteredProducts.every((p) => p.category == entry.key),
+        isTrue,
+      );
+    }
+    shop.selectCategory('Pastries');
+    shop.search('brownies');
+    expect(shop.filteredProducts, isNotEmpty);
+    expect(
+      shop.filteredProducts.every((p) => p.subcategory == 'Brownies'),
+      isTrue,
+    );
+    shop.selectCategory('Food');
+    shop.search('quarter pounder');
+    expect(shop.filteredProducts, hasLength(5));
+    expect(
+      shop.filteredProducts.every((p) => p.subcategory == 'Quarter Pounder'),
+      isTrue,
+    );
+  });
+
   test('Search matches words in any order with repeated whitespace', () {
     shop.search('  LATTE   tiramisu  ');
     expect(shop.filteredProducts.map((p) => p.name), ['Tiramisu Latte']);
     shop.selectCategory('Food');
     expect(shop.filteredProducts, isEmpty);
     shop.search('   ');
-    expect(shop.filteredProducts.every((p) => p.group == 'Food'), isTrue);
+    expect(shop.filteredProducts.every((p) => p.category == 'Food'), isTrue);
     expect(shop.filteredProducts, hasLength(34));
   });
 

@@ -1,0 +1,275 @@
+P001: FINAL PROJECT
+P002: Customized Flutter E-Commerce Application
+P003: Cross-Platform Mobile Development
+P004: Group Project - 2 Members
+[TABLE]
+Framework | Flutter / Dart
+Development Tool | Visual Studio Code
+Main Output | Customized E-Commerce Mobile App
+Additional Requirement | Start Screen using Navigator.push()
+[/TABLE]
+P005: Use the provided starter code as the base, then redesign and customize it into your own e-commerce concept.
+P006: 1. Project Overview
+P007: Create a simple e-commerce mobile application using the provided Flutter starter code. The application is already functional, so the main task is to understand the code and transform it into your group's own online store by changing the store identity, categories, products, images, colors, text, and visual presentation.
+P008: The starter code already contains product search, category filtering, a responsive product grid, product details, Add to Cart, a cart counter, cart total calculation, and screen navigation. These features must continue to work after customization.
+[TABLE]
+Important: Do not submit the starter application unchanged. The final application must clearly represent your selected e-commerce concept.
+[/TABLE]
+P009: 2. Choose an E-Commerce Concept
+P010: Choose one small and clear online-store concept. The products, categories, images, colors, text, and design should all match the selected concept.
+P011: Clothing or fashion store
+P012: Shoe store
+P013: Book store
+P014: Gaming accessories
+P015: Computer or mobile accessories
+P016: School supplies
+P017: Beauty products
+P018: Sports equipment
+P019: Home products
+P020: Food products
+P021: Pet supplies
+P022: Art supplies
+P023: Another appropriate e-commerce concept may also be used. Avoid making the project unnecessarily large.
+P024: 3. Required Application Flow
+[TABLE]
+START SCREEN
+     |
+     |  Navigator.push()
+     v
+HOME / PRODUCT SCREEN
+     |
+     +----------> PRODUCT DETAILS
+     |
+     +----------> CART
+[/TABLE]
+P025: The provided code begins at the Home Screen. The Start Screen is an additional final-project task and must be created separately.
+P026: 4. Plan Before Editing
+P027: Before changing the source code, agree on the basic identity of the store. Prepare the following information first:
+[TABLE]
+Store Name | Example: GameZone
+Store Type | Example: Gaming Accessories
+Main Color | Example: Dark Purple
+Categories | Example: Mouse, Keyboard, Headset, Controllers
+Products | Prepare product names, prices, descriptions, and images
+Tagline | Short text for the Start Screen
+[/TABLE]
+P028: 5. Set Up the Project
+P029: 1.  Create a new Flutter Application in Visual Studio Code.
+P030: 2.  Open lib/main.dart.
+P031: 3.  Replace the default counter application with the provided final-project starter code.
+P032: 4.  Run the original starter application before making major edits.
+P033: 5.  Confirm that Home, Product Details, Cart, Search, Categories, and Add to Cart work correctly.
+[TABLE]
+Recommended Workflow: Make one group of changes at a time, run the application, and verify that it still works before moving to the next customization.
+[/TABLE]
+P034: 6. Customize the Store Name and Home Content
+P035: Search the source code for the current store name and replace it with your own. Also customize the Home Screen heading and short description so they match your store.
+[TABLE]
+// Example
+title: const Text('GameZone'),
+
+const Text('Gaming starts here'),
+const Text('Browse our gaming accessories.'),
+[/TABLE]
+P036: 7. Customize the Theme Colors
+P037: At the top of the source code, edit the AppColors class. The primary color is used in important areas such as the AppBar, buttons, prices, and other accents.
+[TABLE]
+class AppColors {
+  static const Color primary = Color(0xFF6A1B9A);
+  static const Color background = Color(0xFFF7F3F8);
+  static const Color card = Colors.white;
+  static const Color text = Color(0xFF202124);
+}
+[/TABLE]
+P038: Choose a simple and readable theme. Avoid combining too many unrelated colors.
+P039: 8. Customize and Add Categories
+P040: Inside _HomeScreenState, locate the categories list. Replace the sample categories with categories related to your store.
+[TABLE]
+final List<String> categories = [
+  'All',
+  'Mouse',
+  'Keyboard',
+  'Headset',
+  'Controllers',
+];
+[/TABLE]
+[TABLE]
+Category Rule: The value written in Product.category must exactly match a category name. For example, category: 'Mouse' must match 'Mouse' in the categories list.
+[/TABLE]
+P041: 9. Customize and Add Products
+P042: Near the top of main.dart, locate demoProducts. Replace the sample products with your own. Each product needs a name, price, category, description, and image path.
+[TABLE]
+Product(
+  name: 'Gaming Mouse',
+  price: 1299,
+  category: 'Mouse',
+  description:
+      'A lightweight gaming mouse with adjustable sensitivity and programmable buttons.',
+  image: 'assets/images/gaming_mouse.jpg',
+),
+[/TABLE]
+P043: To add another product, copy one complete Product(...) block, paste it below an existing product, and replace the values. GridView.builder automatically creates a product card for every product in the list.
+P044: 10. Add Product Images
+P045: 1.  Create an assets folder in the main Flutter project.
+P046: 2.  Inside assets, create an images folder.
+P047: 3.  Copy your product images into assets/images/.
+P048: 4.  Use simple filenames such as gaming_mouse.jpg, red_shirt.jpg, or history_book.png.
+P049: 5.  Make sure the image path in each Product exactly matches the actual filename.
+[TABLE]
+your_project
+|-- assets
+|   `-- images
+|       |-- gaming_mouse.jpg
+|       |-- keyboard.jpg
+|       `-- headset.jpg
+|-- lib
+|   `-- main.dart
+`-- pubspec.yaml
+[/TABLE]
+P050: 11. Register the Image Folder
+P051: Open pubspec.yaml and register the images folder under flutter: using the correct indentation.
+[TABLE]
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+[/TABLE]
+P052: Save the file, then run:
+[TABLE]
+flutter pub get
+[/TABLE]
+[TABLE]
+Image Error Check: If an image does not appear, verify the filename, extension, path, pubspec.yaml indentation, and whether flutter pub get was run.
+[/TABLE]
+P053: 12. Test the Existing E-Commerce Features
+P054: After adding your own data, verify each existing feature before creating the Start Screen.
+[TABLE]
+Search | Typing part of a product name filters the catalog.
+Categories | Selecting a category shows only matching products.
+Product Grid | All customized products appear correctly.
+Product Details | Selecting a product opens its correct information.
+Add to Cart | The selected product returns to Home and increases the cart count.
+Cart | Selected items appear with their prices.
+Total | The cart total is calculated and displayed.
+[/TABLE]
+P055: 13. Additional Task: Create a Start Screen
+P056: Create an additional opening screen that appears before the e-commerce Home Screen. This screen is intentionally not included in the provided source code.
+P057: Start Screen Requirements
+P058: Store name
+P059: Store logo, icon, or image
+P060: Short tagline or description
+P061: One main button such as GET STARTED, SHOP NOW, or ENTER STORE
+[TABLE]
+[ LOGO / IMAGE ]
+
+STORE NAME
+Short tagline or description
+
+[ GET STARTED ]
+[/TABLE]
+P062: 14. Guide for the Start Screen Navigation
+P063: Create another screen class, such as StartScreen, and build the layout using suitable widgets such as Scaffold, Container, Column, Image or Icon, Text, SizedBox, and ElevatedButton.
+P064: The button should use the screen-navigation concept already discussed. Its purpose is to open HomeScreen using Navigator.push() and MaterialPageRoute.
+[TABLE]
+Button
+   |
+   v
+Navigator.push()
+   |
+   v
+MaterialPageRoute
+   |
+   v
+HomeScreen
+[/TABLE]
+P065: Construct the complete navigation code yourselves. After the Start Screen works, change the application's first screen from HomeScreen to StartScreen inside MaterialApp.
+[TABLE]
+Do Not Remove Navigation: The Start Screen must lead to the e-commerce Home Screen using Navigator.push(). The Product Details and Cart navigation in the provided code must also continue to work.
+[/TABLE]
+P066: 15. Customize Beyond the Basic Code
+P067: The final application should not look identical to the starter version. You may customize the following while keeping the application functional:
+P068: Store logo and Start Screen design
+P069: Store name and headings
+P070: Theme and background colors
+P071: Product-card appearance
+P072: Fonts and text sizes
+P073: Buttons and icons
+P074: Rounded corners and spacing
+P075: Categories and product catalog
+P076: Product images and descriptions
+P077: 16. Suggested Work Distribution
+P078: This project is completed by a group of two. Both members should understand the overall application. A possible division of work is shown below, but the group may organize the work differently.
+[TABLE]
+Member 1 | Member 2
+Start Screen
+Theme and visual customization
+Product images
+Home Screen adjustments | Categories and product data
+Testing and troubleshooting
+Documentation
+Video preparation
+Both members should be able to explain the application flow, customization, and navigation.
+[/TABLE]
+P079: 17. Simple Project Documentation - Lecture Period
+P080: Prepare a short and simple documentation for the application. This is not intended to be a long technical report. Keep the explanations clear and include screenshots of the finished application.
+P081: Required Documentation Sections
+P082: 1. Introduction
+P083: Briefly introduce the e-commerce project and state that it was developed using Flutter.
+P084: 2. Application Description
+P085: Describe the store and the main functions such as Start Screen, catalog, search, categories, Product Details, Cart, and total.
+P086: 3. Target Audience
+P087: Identify the intended users or buyers of the application and explain briefly why the products are relevant to them.
+P088: 4. Why We Chose This E-Commerce Concept
+P089: Explain the group's reason for selecting the store concept, such as personal interest, familiarity, target market, or product demand.
+P090: 5. Application Screenshots
+P091: Include screenshots of every major screen with a short caption.
+P092: Screenshots to Include
+P093: Start Screen
+P094: Home / Product Screen
+P095: Product Details Screen
+P096: Cart Screen
+P097: Any additional screen created by the group
+P098: Example caption: Figure 1. Start Screen of the GameZone application.
+P099: Suggested Documentation Structure
+[TABLE]
+TITLE PAGE
+
+1. Introduction
+2. Application Description
+3. Target Audience
+4. Why We Chose This E-Commerce Concept
+5. Application Screenshots
+   5.1 Start Screen
+   5.2 Home Screen
+   5.3 Product Details Screen
+   5.4 Cart Screen
+[/TABLE]
+P100: 18. Video / Screen Recording
+P101: Create a simple screen recording demonstrating that the application works. Complicated video editing is not required. The recording should clearly show the following flow:
+[TABLE]
+Launch Application
+       |
+       v
+Start Screen
+       |
+       v
+Open the Store
+       |
+       v
+Home Screen
+       |
+       +--> Browse Categories
+       +--> Search Product
+       +--> Open Product Details
+       +--> Add to Cart
+       `--> Open Cart and Show Total
+[/TABLE]
+P102: Before recording, restart the application and make sure there are no missing-image errors, visible overflow warnings, or broken navigation.
+P103: 19. Final Submission
+P104: Submit the following two outputs:
+[TABLE]
+Submission | Requirement
+Simple Documentation - Lecture Period | Introduction, Application Description, Target Audience, Reason for Choosing the Concept, and screenshots of every major screen.
+Video / Screen Recording of the App | Demonstrate Start Screen, Home, Categories, Search, Product Details, Add to Cart, Cart, and Total.
+[/TABLE]

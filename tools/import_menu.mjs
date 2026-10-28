@@ -26,19 +26,19 @@ const products = [];
 for (let i = 1; i < cards.length; i += 3) {
   const [name, price, body] = [decode(cards[i]), Number(cards[i + 1]), cards[i + 2]];
   const image = `assets/images/${posix.basename(decode(body.match(/<img src="([^"]+)"/)[1]))}`;
-  const category = decode(body.match(/<div class="product-tag">([^<]+)/)[1]).trim();
-  const group = food.includes(category) ? 'Food' : pastry.includes(category) ? 'Pastries' : ['Coffee', 'Non-Coffee', 'Ice Blended'].includes(category) ? category : 'More Drinks';
+  const subcategory = decode(body.match(/<div class="product-tag">([^<]+)/)[1]).trim();
+  const category = food.includes(subcategory) ? 'Food' : pastry.includes(subcategory) ? 'Pastries' : ['Coffee', 'Non-Coffee', 'Ice Blended'].includes(subcategory) ? subcategory : 'More Drinks';
   if (!existsSync(new URL(image, root))) throw Error(`Missing image: ${image}`);
   if (!imageFiles.has(image.slice(image.lastIndexOf('/') + 1))) throw Error(`Image filename case mismatch: ${image}`);
   const description = descriptions[name] ?? {
-    Food: `A comforting pick from our ${category.toLowerCase()} menu. Pair it with your favorite handcrafted drink.`,
-    Pastries: `A sweet little moment from our ${category.toLowerCase()} selection. Enjoy it with a hot or iced coffee.`,
+    Food: `A comforting pick from our ${subcategory.toLowerCase()} menu. Pair it with your favorite handcrafted drink.`,
+    Pastries: `A sweet little moment from our ${subcategory.toLowerCase()} selection. Enjoy it with a hot or iced coffee.`,
     Coffee: 'Your next coffee moment, from our espresso-based coffee selection. Made for your everyday cravings.',
     'Non-Coffee': 'Skip the espresso and find a little happiness in our non-coffee drink selection.',
     'Ice Blended': 'A cool, blended treat for a sweet afternoon break. Discover your favorite flavor.',
-    'More Drinks': `A refreshing little break from our ${category.toLowerCase()} selection. A delicious way to complete your order.`,
-  }[group];
-  products.push({ id: `${category}-${name}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), name, price, category, group, description, image, featured: featured.includes(name) });
+    'More Drinks': `A refreshing little break from our ${subcategory.toLowerCase()} selection. A delicious way to complete your order.`,
+  }[category];
+  products.push({ id: `${subcategory}-${name}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), name, price, category, subcategory, description, image, featured: featured.includes(name) });
 }
 products.sort((a, b) => (a.featured ? featured.indexOf(a.name) : 100) - (b.featured ? featured.indexOf(b.name) : 100));
 const dart = (value) => typeof value === 'string' ? JSON.stringify(value).replaceAll('$', '\\$') : String(value);

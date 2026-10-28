@@ -17,12 +17,13 @@ An installable debug APK is available after `flutter build apk --debug` at `buil
 
 ## Included
 
-- Animated splash with a shaded 3D coffee cup, orbiting beans, steam, and the Smooch logo. It automatically opens the menu after 4.6 seconds; “Skip intro” opens it immediately.
-- The splash replaces its navigation route, so Back never returns to the intro. Reduced-motion settings show a still composition with a short transition into the menu.
-- A coordinated 1.1-second transition fades the splash into teal before gently revealing the menu. Initial menu images are preloaded during the intro, and menu controls become active when the transition finishes.
+- A 3D Start Screen with a shaded coffee cup, orbiting beans, steam, the Smooch logo, and a primary SHOP NOW button. The intro settles after 4.6 seconds and waits for the user to enter.
+- SHOP NOW opens the menu using `Navigator.push()` and `MaterialPageRoute`. Back returns to the Start Screen; cart and favorites remain available when entering again. Rapid taps open one menu. Reduced-motion settings show a still composition.
+- A coordinated 600 ms transition fades through teal before gently revealing the menu, configured through the Material page transition theme. Initial menu images are preloaded during the intro, and menu controls become active when the transition finishes.
 - All 92 products from `SmoochCafe/pages/products.html`, using its names, prices, categories, and local product images.
 - Pinned search, one category strip with scroll arrows when needed, and price/name sorting.
 - Search matches words in any order and ignores extra whitespace. Clearing search preserves the chosen category and sort order.
+- Every `Product.category` matches a filter choice. Descriptive product labels, such as Quarter Pounder or Brownies, are kept in `Product.subcategory` and remain searchable.
 - Product details, a favorites list, and browsing positions retained when switching tabs.
 - Clear product-card add buttons, in-bag quantities, and a persistent bag summary with Philippine peso totals.
 - Shared cart with quantities, item removal, and a live badge.
@@ -45,7 +46,7 @@ lib/
   main.dart                  Complete application, following the starter layout
 ```
 
-All application Dart code is in `lib/main.dart`, just like the supplied base code. `main()` runs `MiniShopApp`. Section comments separate colors/theme, product models and data, shopping state, the main application, shared widgets, splash/transition, menu/filter controls, product cards, product details, cart, cafe information, the 3D painter, and widget previews. There are no local Dart imports or `part` files.
+All application Dart code is in `lib/main.dart`, just like the supplied base code. `main()` runs `MiniShopApp`. Section comments separate colors/theme, product models and data, shopping state, the main application, shared widgets, Start Screen/transition, menu/filter controls, product cards, product details, cart, cafe information, the 3D painter, and widget previews. There are no local Dart imports or `part` files.
 
 Product photos, the logo, and cafe images are in `assets/images/`; fonts are in `assets/fonts/`. Both are declared in `pubspec.yaml`. Tests live under `test/` and import `main.dart`.
 
@@ -68,4 +69,4 @@ flutter test
 flutter build web
 ```
 
-The tests cover catalog assets and IDs, search/category combinations and recovery, sorting, same-name product variants, cart totals and removal, favorites, persistent bag actions, pinned filters, tab scroll restoration, larger text, key color contrast pairs, splash completion and skipping, reduced motion, animation disposal, product quantity selection, preview checkout, and layouts at 320, 390, 768, and 1440 pixels.
+The tests cover catalog assets and IDs, exact category matching, subcategory search, search/category combinations and recovery, sorting, same-name product variants, cart totals and removal, favorites, persistent bag actions, pinned filters, tab scroll restoration, larger text, key color contrast pairs, waiting for SHOP NOW, MaterialPageRoute navigation, rapid taps, Back/re-entry with retained shopping state, reduced motion, animation disposal, product quantity selection, preview checkout, and layouts at 320, 390, 768, and 1440 pixels.
