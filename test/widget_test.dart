@@ -242,7 +242,11 @@ void main() {
           .widget<MenuScreen>(find.byType(MenuScreen))
           .controller;
       final add = find.byKey(const Key('add-coffee-tiramisu-latte'));
-      await Scrollable.ensureVisible(tester.element(add), alignment: .5);
+      await tester.scrollUntilVisible(
+        add,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pumpAndSettle();
       await tester.tap(add);
       await tester.pumpAndSettle();

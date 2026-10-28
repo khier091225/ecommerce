@@ -74,26 +74,32 @@ void main() {
 
   test(
     'Placing demo orders snapshots items and totals with sequential references',
-    () {
-      expect(shop.placeDemoOrder(), isNull);
+    () async {
+      Future<OrderReceipt?> place() => shop.submitOrder(
+        customerName: 'Guest',
+        mobileNumber: '09171234567',
+        notes: '',
+        paymentMethod: PaymentMethod.cash,
+      );
+      expect(await place(), isNull);
       final first = shop.products.first;
       final second = shop.products[1];
       shop.addToCart(first, quantity: 2);
       shop.addToCart(second);
       shop.toggleFavorite(first);
-      final order = shop.placeDemoOrder()!;
+      final order = (await place())!;
       expect(order.reference, 'SMC-0001');
       expect(order.itemCount, 3);
       expect(order.total, first.price * 2 + second.price);
       expect(shop.cartCount, 0);
       expect(shop.total, 0);
       expect(shop.favorites, [first]);
-      expect(shop.placeDemoOrder(), isNull);
+      expect(await place(), isNull);
       shop.addToCart(first, quantity: 4);
       expect(order.items.first.quantity, 2);
       expect(order.total, first.price * 2 + second.price);
       expect(() => order.items.clear(), throwsUnsupportedError);
-      final next = shop.placeDemoOrder()!;
+      final next = (await place())!;
       expect(next.reference, 'SMC-0002');
       expect(next.itemCount, 4);
       expect(next.total, first.price * 4);
@@ -144,6 +150,77 @@ void main() {
   });
 
   test(
+    'Saved receipts restore with the same items and unique references',
+    () async {
+      final store = MemoryOrderStore();
+      final first = ShopController(
+        repository: const MenuRepository(),
+        orderStore: store,
+      );
+      first.addToCart(first.products.first, quantity: 2);
+      final receipt = await first.submitOrder(
+        customerName: '  Juan Dela Cruz  ',
+        mobileNumber: '09171234567',
+        notes: 'Less ice',
+        paymentMethod: PaymentMethod.cash,
+      );
+      expect(receipt?.reference, 'SMC-0001');
+      expect(first.cartCount, 0);
+      expect(first.orders, hasLength(1));
+      first.dispose();
+
+      final restored = ShopController(
+        repository: const MenuRepository(),
+        orderStore: store,
+      );
+      await restored.restoreOrders();
+      expect(restored.orders.single.customerName, 'Juan Dela Cruz');
+      expect(restored.orders.single.mobileNumber, '09171234567');
+      expect(restored.orders.single.notes, 'Less ice');
+      expect(restored.orders.single.items.single.quantity, 2);
+      expect(restored.orders.single.total, 290);
+      restored.addToCart(restored.products.first);
+      final next = await restored.submitOrder(
+        customerName: 'Ana',
+        mobileNumber: '09180000000',
+        notes: '',
+        paymentMethod: PaymentMethod.digital,
+      );
+      expect(next?.reference, 'SMC-0002');
+      expect(next?.paymentStatus, 'Demo payment completed');
+      expect(restored.orders.map((order) => order.reference), [
+        'SMC-0002',
+        'SMC-0001',
+      ]);
+      restored.dispose();
+    },
+  );
+
+  test(
+    'Storage failure keeps the bag and does not consume a reference',
+    () async {
+      final failing = ShopController(
+        repository: const MenuRepository(),
+        orderStore: _FailingOrderStore(),
+      );
+      failing.addToCart(failing.products.first);
+      await expectLater(
+        failing.submitOrder(
+          customerName: 'Ana',
+          mobileNumber: '09180000000',
+          notes: '',
+          paymentMethod: PaymentMethod.cash,
+        ),
+        throwsStateError,
+      );
+      expect(failing.cartCount, 1);
+      expect(failing.orders, isEmpty);
+      expect(failing.placingOrder, isFalse);
+      failing.dispose();
+    },
+  );
+
+  test(
     'Sorting applies to filtered results without changing catalog order',
     () {
       final originalIds = shop.products.map((p) => p.id).toList();
@@ -167,4 +244,13 @@ void main() {
       expect(shop.filteredProducts.first.name, 'Tiramisu Latte');
     },
   );
+}
+
+class _FailingOrderStore implements OrderStore {
+  @override
+  Future<String?> read() async => null;
+
+  @override
+  Future<void> write(String value) async =>
+      throw StateError('Storage unavailable');
 }

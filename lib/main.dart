@@ -1,11 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  runApp(const MiniShopApp());
+  runApp(MiniShopApp(orderStore: PreferencesOrderStore()));
 }
 
 // ============================================================
@@ -197,6 +199,28 @@ class Product {
   final String description;
   final String image;
   final bool featured;
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'price': price,
+    'category': category,
+    'subcategory': subcategory,
+    'description': description,
+    'image': image,
+    'featured': featured,
+  };
+
+  factory Product.fromJson(Map<String, dynamic> json) => Product(
+    id: json['id'] as String,
+    name: json['name'] as String,
+    price: json['price'] as int,
+    category: json['category'] as String,
+    subcategory: json['subcategory'] as String,
+    description: json['description'] as String,
+    image: json['image'] as String,
+    featured: json['featured'] as bool? ?? false,
+  );
 }
 
 @immutable
@@ -206,19 +230,100 @@ class CartItem {
   final Product product;
   final int quantity;
   int get total => product.price * quantity;
+
+  Map<String, Object?> toJson() => {
+    'product': product.toJson(),
+    'quantity': quantity,
+  };
+
+  factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
+    product: Product.fromJson(json['product'] as Map<String, dynamic>),
+    quantity: json['quantity'] as int,
+  );
 }
 
 String pesos(num amount) => '\u20b1${amount.toStringAsFixed(2)}';
 
+String orderDate(DateTime value) {
+  final local = value.toLocal();
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
+}
+
 @immutable
 class OrderReceipt {
-  OrderReceipt({required this.reference, required List<CartItem> items})
-    : items = List.unmodifiable(items);
+  OrderReceipt({
+    required this.reference,
+    required List<CartItem> items,
+    required this.customerName,
+    required this.mobileNumber,
+    required this.notes,
+    required this.paymentMethod,
+    required this.createdAt,
+  }) : items = List.unmodifiable(items);
 
   final String reference;
   final List<CartItem> items;
+  final String customerName;
+  final String mobileNumber;
+  final String notes;
+  final PaymentMethod paymentMethod;
+  final DateTime createdAt;
+  String get paymentStatus => paymentMethod == PaymentMethod.cash
+      ? 'Payment due at pickup'
+      : 'Demo payment completed';
   int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
   int get total => items.fold(0, (sum, item) => sum + item.total);
+
+  Map<String, Object?> toJson() => {
+    'reference': reference,
+    'items': items.map((item) => item.toJson()).toList(),
+    'customerName': customerName,
+    'mobileNumber': mobileNumber,
+    'notes': notes,
+    'paymentMethod': paymentMethod.name,
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  factory OrderReceipt.fromJson(Map<String, dynamic> json) => OrderReceipt(
+    reference: json['reference'] as String,
+    items: (json['items'] as List)
+        .map((item) => CartItem.fromJson(item as Map<String, dynamic>))
+        .toList(),
+    customerName: json['customerName'] as String? ?? '',
+    mobileNumber: json['mobileNumber'] as String? ?? '',
+    notes: json['notes'] as String? ?? '',
+    paymentMethod: PaymentMethod.values.byName(
+      json['paymentMethod'] as String? ?? 'cash',
+    ),
+    createdAt: DateTime.parse(json['createdAt'] as String),
+  );
+}
+
+enum PaymentMethod { cash, digital }
+
+abstract class OrderStore {
+  Future<String?> read();
+  Future<void> write(String value);
+}
+
+class PreferencesOrderStore implements OrderStore {
+  final SharedPreferencesAsync _preferences = SharedPreferencesAsync();
+  static const _key = 'smooch_cafe_orders_v1';
+
+  @override
+  Future<String?> read() => _preferences.getString(_key);
+
+  @override
+  Future<void> write(String value) => _preferences.setString(_key, value);
+}
+
+class MemoryOrderStore implements OrderStore {
+  String? value;
+  @override
+  Future<String?> read() async => value;
+  @override
+  Future<void> write(String value) async => this.value = value;
 }
 
 // ============================================================
@@ -1173,11 +1278,16 @@ enum MenuSort {
 }
 
 class ShopController extends ChangeNotifier {
-  ShopController({required this.repository});
+  ShopController({required this.repository, OrderStore? orderStore})
+    : orderStore = orderStore ?? MemoryOrderStore();
 
   final MenuRepository repository;
+  final OrderStore orderStore;
   final Map<String, CartItem> _cart = {};
   final Set<String> _favorites = {};
+  final List<OrderReceipt> _orders = [];
+  bool _placingOrder = false;
+  Future<void>? _restoreTask;
   int _nextOrderNumber = 1;
   String _query = '';
   String _category = 'All';
@@ -1196,6 +1306,8 @@ class ShopController extends ChangeNotifier {
   String get query => _query;
   String get category => _category;
   MenuSort get sort => _sort;
+  bool get placingOrder => _placingOrder;
+  List<OrderReceipt> get orders => List.unmodifiable(_orders);
   bool get hasActiveFilters =>
       _query.trim().isNotEmpty ||
       _category != 'All' ||
@@ -1267,7 +1379,7 @@ class ShopController extends ChangeNotifier {
   }
 
   void addToCart(Product product, {int quantity = 1}) {
-    if (quantity < 1) return;
+    if (quantity < 1 || _placingOrder) return;
     final previous = _cart[product.id]?.quantity ?? 0;
     _cart[product.id] = CartItem(
       product: product,
@@ -1277,6 +1389,7 @@ class ShopController extends ChangeNotifier {
   }
 
   void decrease(Product product) {
+    if (_placingOrder) return;
     final current = _cart[product.id];
     if (current == null) return;
     if (current.quantity == 1) {
@@ -1291,19 +1404,71 @@ class ShopController extends ChangeNotifier {
   }
 
   void remove(Product product) {
+    if (_placingOrder) return;
     _cart.remove(product.id);
     notifyListeners();
   }
 
-  OrderReceipt? placeDemoOrder() {
-    if (_cart.isEmpty) return null;
-    final order = OrderReceipt(
-      reference: 'SMC-${(_nextOrderNumber++).toString().padLeft(4, '0')}',
-      items: cartItems,
-    );
-    _cart.clear();
+  Future<void> restoreOrders() => _restoreTask ??= _loadOrders();
+
+  Future<void> _loadOrders() async {
+    final saved = await orderStore.read();
+    if (saved == null) return;
+    try {
+      final data = jsonDecode(saved) as Map<String, dynamic>;
+      final restored = (data['orders'] as List)
+          .map((entry) => OrderReceipt.fromJson(entry as Map<String, dynamic>))
+          .toList();
+      _orders
+        ..clear()
+        ..addAll(restored);
+      _nextOrderNumber = math.max(1, data['nextOrderNumber'] as int);
+      notifyListeners();
+    } on FormatException {
+      // A damaged local record must not stop the menu from opening.
+    } on TypeError {
+      // Ignore a record from an incompatible older schema.
+    }
+  }
+
+  String _encodeOrders({OrderReceipt? newOrder}) => jsonEncode({
+    'nextOrderNumber': _nextOrderNumber + (newOrder == null ? 0 : 1),
+    'orders': [
+      if (newOrder != null) newOrder.toJson(),
+      ..._orders.map((order) => order.toJson()),
+    ],
+  });
+
+  Future<OrderReceipt?> submitOrder({
+    required String customerName,
+    required String mobileNumber,
+    required String notes,
+    required PaymentMethod paymentMethod,
+  }) async {
+    if (_cart.isEmpty || _placingOrder) return null;
+    _placingOrder = true;
     notifyListeners();
-    return order;
+    try {
+      await restoreOrders();
+      final order = OrderReceipt(
+        reference: 'SMC-${_nextOrderNumber.toString().padLeft(4, '0')}',
+        items: cartItems,
+        customerName: customerName.trim(),
+        mobileNumber: mobileNumber.trim(),
+        notes: notes.trim(),
+        paymentMethod: paymentMethod,
+        createdAt: DateTime.now(),
+      );
+      await orderStore.write(_encodeOrders(newOrder: order));
+      _nextOrderNumber++;
+      _orders.insert(0, order);
+      _cart.clear();
+      notifyListeners();
+      return order;
+    } finally {
+      _placingOrder = false;
+      notifyListeners();
+    }
   }
 }
 
@@ -1312,14 +1477,25 @@ class ShopController extends ChangeNotifier {
 // ============================================================
 
 class MiniShopApp extends StatefulWidget {
-  const MiniShopApp({super.key});
+  const MiniShopApp({super.key, this.orderStore});
+  final OrderStore? orderStore;
 
   @override
   State<MiniShopApp> createState() => _MiniShopAppState();
 }
 
 class _MiniShopAppState extends State<MiniShopApp> {
-  final controller = ShopController(repository: const MenuRepository());
+  late final ShopController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = ShopController(
+      repository: const MenuRepository(),
+      orderStore: widget.orderStore,
+    );
+    unawaited(controller.restoreOrders().catchError((Object _) {}));
+  }
 
   @override
   void dispose() {
@@ -1878,21 +2054,32 @@ class MenuScreen extends StatefulWidget {
   State<MenuScreen> createState() => _MenuScreenState();
 }
 
-class _MenuScreenState extends State<MenuScreen> {
+class _MenuScreenState extends State<MenuScreen>
+    with SingleTickerProviderStateMixin {
   int tab = 0;
   final search = TextEditingController();
   final scrolls = List.generate(3, (_) => ScrollController());
+  final featuredPages = PageController(viewportFraction: .9);
+  late final AnimationController filterMotion;
+  int featuredIndex = 0;
+  double slideDirection = 1;
   ShopController get shop => widget.controller;
 
   @override
   void initState() {
     super.initState();
     search.text = shop.query;
+    filterMotion = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 340),
+    )..value = 1;
   }
 
   @override
   void dispose() {
     search.dispose();
+    filterMotion.dispose();
+    featuredPages.dispose();
     for (final scroll in scrolls) {
       scroll.dispose();
     }
@@ -1907,6 +2094,15 @@ class _MenuScreenState extends State<MenuScreen> {
     );
   }
 
+  void openOrderHistory() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => OrderHistoryScreen(controller: shop),
+      ),
+    );
+  }
+
   void selectTab(int value) {
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => tab = value);
@@ -1918,19 +2114,38 @@ class _MenuScreenState extends State<MenuScreen> {
 
   void selectCategory(String category) {
     FocusManager.instance.primaryFocus?.unfocus();
+    slideDirection =
+        ShopController.categories.indexOf(category) >=
+            ShopController.categories.indexOf(shop.category)
+        ? 1
+        : -1;
     shop.selectCategory(category);
+    animateFilters();
     resetPosition();
   }
 
   void queryChanged(String query) {
     shop.search(query);
+    slideDirection = 1;
+    animateFilters(quick: true);
     resetPosition();
+  }
+
+  void animateFilters({bool quick = false}) {
+    filterMotion.duration = Duration(milliseconds: quick ? 170 : 340);
+    if (MediaQuery.disableAnimationsOf(context)) {
+      filterMotion.value = 1;
+    } else {
+      filterMotion.forward(from: 0);
+    }
   }
 
   void resetFilters() {
     FocusManager.instance.primaryFocus?.unfocus();
     search.clear();
     shop.resetFilters();
+    slideDirection = -1;
+    animateFilters();
     resetPosition();
   }
 
@@ -1995,6 +2210,14 @@ class _MenuScreenState extends State<MenuScreen> {
                         ),
                       const SizedBox(width: 20),
                     ],
+                    IconButton(
+                      tooltip: 'Order history',
+                      onPressed: openOrderHistory,
+                      icon: const Icon(
+                        Icons.receipt_long_outlined,
+                        color: AppColors.white,
+                      ),
+                    ),
                     CartButton(controller: shop, onPressed: openCart),
                   ],
                 ),
@@ -2111,6 +2334,18 @@ class _MenuScreenState extends State<MenuScreen> {
                       ),
                     ),
                   ),
+                if (tab == 0 &&
+                    shop.category == 'All' &&
+                    shop.query.trim().isEmpty)
+                  SliverToBoxAdapter(
+                    child: _FeaturedCarousel(
+                      controller: shop,
+                      pages: featuredPages,
+                      currentPage: featuredIndex,
+                      onPageChanged: (value) =>
+                          setState(() => featuredIndex = value),
+                    ),
+                  ),
                 if (tab != 2) ...[
                   SliverToBoxAdapter(
                     child: ContentWidth(
@@ -2177,6 +2412,8 @@ class _MenuScreenState extends State<MenuScreen> {
                                 initialValue: shop.sort,
                                 onSelected: (value) {
                                   shop.sortBy(value);
+                                  slideDirection = 1;
+                                  animateFilters();
                                   resetPosition();
                                 },
                                 itemBuilder: (_) => [
@@ -2298,9 +2535,25 @@ class _MenuScreenState extends State<MenuScreen> {
                                       math.min(cardWidth * .76, 176) +
                                       144 * scale,
                                 ),
-                            itemBuilder: (_, index) => ProductCard(
-                              product: items[index],
-                              controller: shop,
+                            itemBuilder: (_, index) => FadeTransition(
+                              key: Key('filter-motion-${items[index].id}'),
+                              opacity: filterMotion,
+                              child: SlideTransition(
+                                position:
+                                    Tween<Offset>(
+                                      begin: Offset(.10 * slideDirection, 0),
+                                      end: Offset.zero,
+                                    ).animate(
+                                      CurvedAnimation(
+                                        parent: filterMotion,
+                                        curve: Curves.easeOutCubic,
+                                      ),
+                                    ),
+                                child: ProductCard(
+                                  product: items[index],
+                                  controller: shop,
+                                ),
+                              ),
                             ),
                           );
                         },
@@ -2329,6 +2582,175 @@ class _MenuScreenState extends State<MenuScreen> {
       );
     },
   );
+}
+
+class _FeaturedCarousel extends StatelessWidget {
+  const _FeaturedCarousel({
+    required this.controller,
+    required this.pages,
+    required this.currentPage,
+    required this.onPageChanged,
+  });
+  final ShopController controller;
+  final PageController pages;
+  final int currentPage;
+  final ValueChanged<int> onPageChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final featured = controller.products
+        .where((item) => item.featured)
+        .take(5)
+        .toList();
+    if (featured.isEmpty) return const SizedBox.shrink();
+    final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 4, 10, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 14),
+                child: Eyebrow('Smooch favorites · Swipe to explore'),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 178 * scale.clamp(1, 1.5),
+                child: PageView.builder(
+                  key: const Key('featured-carousel'),
+                  controller: pages,
+                  itemCount: featured.length,
+                  onPageChanged: onPageChanged,
+                  itemBuilder: (context, index) {
+                    final product = featured[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: Material(
+                        color: AppColors.dark,
+                        borderRadius: BorderRadius.circular(22),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          key: Key('featured-${product.id}'),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => ProductDetailsScreen(
+                                product: product,
+                                controller: controller,
+                              ),
+                            ),
+                          ),
+                          child: Stack(
+                            children: [
+                              Positioned.fill(
+                                right: 0,
+                                left: null,
+                                child: SizedBox(
+                                  width: 165,
+                                  child: ProductImage(product: product),
+                                ),
+                              ),
+                              Positioned.fill(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        AppColors.dark,
+                                        AppColors.dark,
+                                        AppColors.dark.withValues(alpha: .7),
+                                        AppColors.dark.withValues(alpha: .06),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'CAFE PICK',
+                                      style: TextStyle(
+                                        color: AppColors.muted,
+                                        fontSize: 10,
+                                        letterSpacing: 1.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    SizedBox(
+                                      width: 180,
+                                      child: Text(
+                                        product.name,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: AppColors.white,
+                                          fontSize: 19 * scale.clamp(1, 1.3),
+                                          fontWeight: FontWeight.w700,
+                                          height: 1.2,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          pesos(product.price),
+                                          style: const TextStyle(
+                                            color: AppColors.white,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        IconButton.filledTonal(
+                                          tooltip: 'Add ${product.name} to bag',
+                                          onPressed: () =>
+                                              controller.addToCart(product),
+                                          icon: const Icon(Icons.add, size: 18),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var index = 0; index < featured.length; index++)
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: index == currentPage ? 18 : 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: index == currentPage
+                            ? AppColors.teal
+                            : AppColors.border,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _BagSummary extends StatelessWidget {
@@ -2889,11 +3311,14 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                               size: 15,
                             ),
                             SizedBox(width: 8),
-                            Text(
-                              'Made with love at Smooch Cafe.',
-                              style: TextStyle(
-                                color: AppColors.secondaryText,
-                                fontSize: 10,
+                            Expanded(
+                              child: Text(
+                                'Made with love at Smooch Cafe.',
+                                softWrap: true,
+                                style: TextStyle(
+                                  color: AppColors.secondaryText,
+                                  fontSize: 10,
+                                ),
                               ),
                             ),
                           ],
@@ -2923,25 +3348,18 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
-  OrderReceipt? _submittedOrder;
   ShopController get controller => widget.controller;
-  // Keep the reviewed bag visible while the confirmation transitions in.
-  List<CartItem> get items => _submittedOrder?.items ?? controller.cartItems;
-  int get itemCount => _submittedOrder?.itemCount ?? controller.cartCount;
-  int get orderTotal => _submittedOrder?.total ?? controller.total;
+  List<CartItem> get items => controller.cartItems;
+  int get itemCount => controller.cartCount;
+  int get orderTotal => controller.total;
 
-  void _placeOrder() {
-    if (_submittedOrder != null) return;
-    final order = controller.placeDemoOrder();
-    if (order == null) return;
-    setState(() => _submittedOrder = order);
+  void _openCheckout() {
+    if (items.isEmpty) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    Navigator.of(context).pushAndRemoveUntil<void>(
+    Navigator.of(context).push(
       MaterialPageRoute<void>(
-        settings: const RouteSettings(name: OrderConfirmationScreen.routeName),
-        builder: (_) => OrderConfirmationScreen(order: order),
+        builder: (_) => CheckoutScreen(controller: controller),
       ),
-      (route) => route.settings.name == MenuScreen.routeName || route.isFirst,
     );
   }
 
@@ -3021,10 +3439,13 @@ class _CartScreenState extends State<CartScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 12,
+                          runSpacing: 10,
                           children: [
                             const Text('Total', style: TextStyle(fontSize: 16)),
-                            const Spacer(),
                             Text(
                               pesos(orderTotal),
                               key: const Key('cart-total'),
@@ -3039,7 +3460,7 @@ class _CartScreenState extends State<CartScreen> {
                         const Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            'Demo order only. No payment or cafe submission.',
+                            'Pickup demo. No order is sent to the cafe.',
                             style: TextStyle(
                               color: AppColors.secondaryText,
                               fontSize: 12,
@@ -3051,13 +3472,11 @@ class _CartScreenState extends State<CartScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
-                            key: const Key('place-order'),
-                            onPressed: _submittedOrder == null
-                                ? _placeOrder
-                                : null,
+                            key: const Key('open-checkout'),
+                            onPressed: _openCheckout,
                             iconAlignment: IconAlignment.end,
                             icon: const Icon(Icons.arrow_forward, size: 18),
-                            label: const Text('Place Order'),
+                            label: const Text('Continue to checkout'),
                           ),
                         ),
                       ],
@@ -3143,14 +3562,17 @@ class _CartRow extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            Row(
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
               children: [
                 QuantityPicker(
                   quantity: item.quantity,
                   onDecrease: () => controller.decrease(item.product),
                   onIncrease: () => controller.addToCart(item.product),
                 ),
-                const Spacer(),
                 Text(
                   pesos(item.total),
                   style: const TextStyle(
@@ -3168,14 +3590,530 @@ class _CartRow extends StatelessWidget {
 }
 
 // ============================================================
+// SAVED ORDERS
+// ============================================================
+class OrderHistoryScreen extends StatelessWidget {
+  const OrderHistoryScreen({super.key, required this.controller});
+  final ShopController controller;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) => Scaffold(
+      appBar: AppBar(
+        title: const Text('Your orders', style: TextStyle(fontSize: 16)),
+      ),
+      body: controller.orders.isEmpty
+          ? Center(
+              child: SingleChildScrollView(
+                child: EmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'No orders yet.',
+                  message: 'Your completed demo orders will appear here.',
+                  action: FilledButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Browse the menu'),
+                  ),
+                ),
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              itemCount: controller.orders.length,
+              itemBuilder: (context, index) {
+                final order = controller.orders[index];
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 680),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                      child: Material(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(18),
+                        child: InkWell(
+                          key: Key('history-${order.reference}'),
+                          borderRadius: BorderRadius.circular(18),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => OrderConfirmationScreen(
+                                order: order,
+                                fromHistory: true,
+                              ),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.receipt_long,
+                                      color: AppColors.teal,
+                                      size: 26,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        order.reference,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.dark,
+                                        ),
+                                      ),
+                                    ),
+                                    const Icon(
+                                      Icons.chevron_right,
+                                      color: AppColors.secondaryText,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  orderDate(order.createdAt),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.secondaryText,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'} · ${order.paymentStatus}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.secondaryText,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  pesos(order.total),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+    ),
+  );
+}
+
+// ============================================================
+// CHECKOUT AND DEMO PAYMENT
+// ============================================================
+class CheckoutScreen extends StatefulWidget {
+  const CheckoutScreen({super.key, required this.controller});
+  final ShopController controller;
+
+  @override
+  State<CheckoutScreen> createState() => _CheckoutScreenState();
+}
+
+class _CheckoutScreenState extends State<CheckoutScreen> {
+  final form = GlobalKey<FormState>();
+  final name = TextEditingController();
+  final mobile = TextEditingController();
+  final notes = TextEditingController();
+  PaymentMethod payment = PaymentMethod.cash;
+  bool busy = false;
+
+  @override
+  void dispose() {
+    name.dispose();
+    mobile.dispose();
+    notes.dispose();
+    super.dispose();
+  }
+
+  String? validateMobile(String? value) {
+    final cleaned = (value ?? '').replaceAll(RegExp(r'[\s-]'), '');
+    if (!RegExp(r'^(09\d{9}|\+639\d{9})$').hasMatch(cleaned)) {
+      return 'Enter a valid PH mobile number';
+    }
+    return null;
+  }
+
+  Future<void> placeOrder() async {
+    if (busy || !form.currentState!.validate()) return;
+    setState(() => busy = true);
+    try {
+      if (payment == PaymentMethod.digital) {
+        final paid = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(builder: (_) => const DemoPaymentScreen()),
+        );
+        if (!mounted || paid != true) return;
+      }
+      final order = await widget.controller.submitOrder(
+        customerName: name.text,
+        mobileNumber: mobile.text,
+        notes: notes.text,
+        paymentMethod: payment,
+      );
+      if (!mounted || order == null) return;
+      Navigator.of(context).pushAndRemoveUntil<void>(
+        MaterialPageRoute<void>(
+          settings: const RouteSettings(
+            name: OrderConfirmationScreen.routeName,
+          ),
+          builder: (_) => OrderConfirmationScreen(order: order),
+        ),
+        (route) => route.settings.name == MenuScreen.routeName || route.isFirst,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not save the order. Your bag is still here.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('Checkout', style: TextStyle(fontSize: 16)),
+    ),
+    body: SingleChildScrollView(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
+            child: Form(
+              key: form,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Eyebrow('Pickup details'),
+                  const SizedBox(height: 10),
+                  Text('Almost yours.', style: displayStyle(32)),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Enter the details the cafe would use to identify your pickup order.',
+                    style: TextStyle(
+                      color: AppColors.secondaryText,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  TextFormField(
+                    key: const Key('customer-name'),
+                    controller: name,
+                    textCapitalization: TextCapitalization.words,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Full name *',
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                    validator: (value) => (value ?? '').trim().length < 2
+                        ? 'Enter your name'
+                        : null,
+                  ),
+                  const SizedBox(height: 18),
+                  TextFormField(
+                    key: const Key('customer-mobile'),
+                    controller: mobile,
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Mobile number *',
+                      hintText: '09XX XXX XXXX',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                    ),
+                    validator: validateMobile,
+                  ),
+                  const SizedBox(height: 18),
+                  TextFormField(
+                    key: const Key('customer-notes'),
+                    controller: notes,
+                    maxLines: 3,
+                    maxLength: 200,
+                    decoration: const InputDecoration(
+                      labelText: 'Pickup notes (optional)',
+                      alignLabelWithHint: true,
+                      hintText: 'Anything the cafe should know?',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Eyebrow('Payment method'),
+                  const SizedBox(height: 12),
+                  _PaymentChoice(
+                    key: const Key('payment-cash'),
+                    title: 'Cash at pickup',
+                    subtitle: 'Pay when you collect your order',
+                    icon: Icons.payments_outlined,
+                    selected: payment == PaymentMethod.cash,
+                    onTap: () => setState(() => payment = PaymentMethod.cash),
+                  ),
+                  const SizedBox(height: 10),
+                  _PaymentChoice(
+                    key: const Key('payment-digital'),
+                    title: 'Demo digital payment',
+                    subtitle: 'Simulate a payment; no money is taken',
+                    icon: Icons.account_balance_wallet_outlined,
+                    selected: payment == PaymentMethod.digital,
+                    onTap: () =>
+                        setState(() => payment = PaymentMethod.digital),
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      spacing: 16,
+                      runSpacing: 8,
+                      children: [
+                        Text(
+                          '${widget.controller.cartCount} ${widget.controller.cartCount == 1 ? 'item' : 'items'} · Pickup',
+                        ),
+                        Text(
+                          pesos(widget.controller.total),
+                          key: const Key('checkout-total'),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Demo checkout only. The cafe will not receive this order.',
+                    style: TextStyle(
+                      color: AppColors.secondaryText,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+    bottomNavigationBar: ColoredBox(
+      color: AppColors.surface,
+      child: SafeArea(
+        top: false,
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  key: const Key('place-order'),
+                  onPressed: busy ? null : placeOrder,
+                  icon: busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.arrow_forward, size: 18),
+                  iconAlignment: IconAlignment.end,
+                  label: Text(
+                    payment == PaymentMethod.cash
+                        ? 'Place demo order'
+                        : 'Continue to demo payment',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _PaymentChoice extends StatelessWidget {
+  const _PaymentChoice({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: selected ? AppColors.softTeal : AppColors.surface,
+    borderRadius: BorderRadius.circular(16),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? AppColors.teal : AppColors.border,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: AppColors.dark),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: AppColors.secondaryText,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              selected ? Icons.check_circle : Icons.circle_outlined,
+              color: selected ? AppColors.teal : AppColors.secondaryText,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class DemoPaymentScreen extends StatefulWidget {
+  const DemoPaymentScreen({super.key});
+
+  @override
+  State<DemoPaymentScreen> createState() => _DemoPaymentScreenState();
+}
+
+class _DemoPaymentScreenState extends State<DemoPaymentScreen> {
+  bool failed = false;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('Demo payment', style: TextStyle(fontSize: 16)),
+    ),
+    body: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  size: 72,
+                  color: AppColors.teal,
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Demo digital payment',
+                  textAlign: TextAlign.center,
+                  style: displayStyle(30),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Choose an outcome to preview the payment flow. No card, wallet, or real payment is used.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.secondaryText, height: 1.5),
+                ),
+                if (failed) ...[
+                  const SizedBox(height: 22),
+                  const Text(
+                    'Payment failed. Your bag is safe; try again or go back.',
+                    key: Key('payment-failure'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.action,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 30),
+                FilledButton(
+                  key: const Key('simulate-payment-success'),
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Simulate successful payment'),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  key: const Key('simulate-payment-failure'),
+                  onPressed: () => setState(() => failed = true),
+                  child: const Text('Simulate failed payment'),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  key: const Key('cancel-payment'),
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel payment'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+// ============================================================
 // ORDER CONFIRMATION
 // ============================================================
 class OrderConfirmationScreen extends StatelessWidget {
-  const OrderConfirmationScreen({super.key, required this.order});
+  const OrderConfirmationScreen({
+    super.key,
+    required this.order,
+    this.fromHistory = false,
+  });
   static const routeName = '/order-confirmation';
   final OrderReceipt order;
+  final bool fromHistory;
 
   void _continueShopping(BuildContext context) {
+    if (fromHistory) {
+      Navigator.of(context).pop();
+      return;
+    }
     Navigator.of(context).popUntil(
       (route) => route.settings.name == MenuScreen.routeName || route.isFirst,
     );
@@ -3186,7 +4124,7 @@ class OrderConfirmationScreen extends StatelessWidget {
     appBar: AppBar(
       title: const Text('Order confirmation', style: TextStyle(fontSize: 16)),
       leading: IconButton(
-        tooltip: 'Back to menu',
+        tooltip: fromHistory ? 'Back to orders' : 'Back to menu',
         onPressed: () => _continueShopping(context),
         icon: const Icon(Icons.arrow_back),
       ),
@@ -3259,6 +4197,30 @@ class OrderConfirmationScreen extends StatelessWidget {
                       const SizedBox(height: 12),
                       Text(
                         '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'} · Demo order',
+                        style: const TextStyle(
+                          color: AppColors.secondaryText,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Pickup for ${order.customerName}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      if (order.mobileNumber.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(order.mobileNumber),
+                      ],
+                      if (order.notes.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text('Note: ${order.notes}'),
+                      ],
+                      const SizedBox(height: 8),
+                      Text(
+                        order.paymentMethod == PaymentMethod.cash
+                            ? 'Cash at pickup · ${order.paymentStatus}'
+                            : 'Digital demo · ${order.paymentStatus}',
+                        key: const Key('confirmation-payment'),
                         style: const TextStyle(
                           color: AppColors.secondaryText,
                           fontSize: 12,
@@ -3375,7 +4337,9 @@ class OrderConfirmationScreen extends StatelessWidget {
                   onPressed: () => _continueShopping(context),
                   iconAlignment: IconAlignment.end,
                   icon: const Icon(Icons.arrow_forward, size: 18),
-                  label: const Text('Continue Shopping'),
+                  label: Text(
+                    fromHistory ? 'Back to orders' : 'Continue Shopping',
+                  ),
                 ),
               ),
             ),

@@ -22,16 +22,18 @@ An installable debug APK is available after `flutter build apk --debug` at `buil
 - A coordinated 600 ms transition fades through teal before gently revealing the menu, configured through the Material page transition theme. Initial menu images are preloaded during the intro, and menu controls become active when the transition finishes.
 - All 92 products from `SmoochCafe/pages/products.html`, using its names, prices, categories, and local product images.
 - Pinned search and wrapping category chips keep every choice visible without category navigation arrows. Tap a selected category to return to All, or use Reset to clear search, category, and sorting together.
+- A swipeable featured-product carousel gives the menu an image-led entry point. Product cards slide and fade in when categories or sorting change; search results use a shorter transition. Reduced-motion settings skip these effects.
 - Search matches words in any order and ignores extra whitespace. Clearing search preserves the chosen category and sort order.
 - Every `Product.category` matches a filter choice. Descriptive product labels, such as Quarter Pounder or Brownies, are kept in `Product.subcategory` and remain searchable.
 - Product details, a favorites list, and browsing positions retained when switching tabs.
 - Compact product cards with shorter photos, price/Add controls side by side, and up to five columns on wide screens. Cards adapt for larger text and retain in-bag quantities and a persistent bag summary with Philippine peso totals.
 - Shared cart with quantities, item removal, and a live badge.
-- Place Order opens a demo confirmation with an order reference, products, quantities, and total. The completed bag is cleared, while the receipt keeps its original details. Continue Shopping and Back return to the menu, including when the bag was opened from product details. No orders or payments are sent to the cafe.
+- The bag leads to checkout with required name and Philippine mobile number, optional pickup notes, and a choice of cash at pickup or demo digital payment. Digital payment can simulate success, failure, or cancellation. The bag stays intact until an order is saved successfully.
+- Confirmation shows the saved receipt, customer details, payment method/status, products, quantities, and total. Order history reopens receipts after restarting the app, with references continuing in sequence. No order is sent to the cafe and no real payment is taken.
 - Cafe location, hours, phone number, and email copied from the supplied website.
 - Responsive phone, tablet, and desktop layouts, plus widget previews at the end of `lib/main.dart`.
 
-Cart and favorites are kept in memory during the app session. Demo order references are numbered within that session. Restarting the app resets this state. The app has no backend or account system.
+Cart and favorites are kept in memory during the app session. Completed demo receipts and the next reference number are stored locally on the device with `shared_preferences`. The app has no backend or account system, so history does not sync across devices.
 
 ## Design
 
@@ -46,7 +48,7 @@ lib/
   main.dart                  Complete application, following the starter layout
 ```
 
-All application Dart code is in `lib/main.dart`, just like the supplied base code. `main()` runs `MiniShopApp`. Section comments separate colors/theme, product models and data, shopping state, the main application, shared widgets, Start Screen/transition, menu/filter controls, product cards, product details, cart, order confirmation, cafe information, the 3D painter, and widget previews. There are no local Dart imports or `part` files.
+All application Dart code is in `lib/main.dart`, just like the supplied base code. `main()` runs `MiniShopApp`. Section comments separate colors/theme, product models and data, shopping state, the main application, shared widgets, Start Screen/transition, menu/filter controls, product cards, product details, cart, checkout, demo payment, order history/confirmation, cafe information, the 3D painter, and widget previews. There are no local Dart imports or `part` files.
 
 Product photos, the logo, and cafe images are in `assets/images/`; fonts are in `assets/fonts/`. Both are declared in `pubspec.yaml`. Tests live under `test/` and import `main.dart`.
 
@@ -69,4 +71,4 @@ flutter test
 flutter build web
 ```
 
-The tests cover catalog assets and IDs, exact category matching, subcategory search, search/category combinations and recovery, sorting, same-name product variants, cart totals and removal, favorites, persistent bag actions, pinned filters, tab scroll restoration, larger text, key color contrast pairs, waiting for SHOP NOW, MaterialPageRoute navigation, rapid taps, Back/re-entry with retained shopping state, reduced motion, animation disposal, product quantity selection, immutable demo-order receipts and references, confirmation navigation, long orders with larger text, and layouts at 320, 390, 768, and 1440 pixels.
+The tests cover catalog assets and IDs, filtering, sorting, carousel swiping, result animation, cart/favorites, checkout validation, demo payment outcomes, failed storage safety, receipt restoration and references after restart, confirmation/history navigation, reduced motion, and narrow-screen layouts with the bundled fonts.

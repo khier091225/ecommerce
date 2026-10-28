@@ -22,7 +22,11 @@ void main() {
     await tester.pumpAndSettle();
     if (fromDetails) {
       final product = find.byKey(Key('product-${shop.products.first.id}'));
-      await Scrollable.ensureVisible(tester.element(product), alignment: .5);
+      await tester.scrollUntilVisible(
+        product,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pumpAndSettle();
       await tester.tap(product);
       await tester.pumpAndSettle();
@@ -38,6 +42,30 @@ void main() {
       shop.toggleFavorite(shop.products.first);
       await openBag(tester);
       expect(find.text('Review order'), findsNothing);
+      await tester.tap(find.byKey(const Key('open-checkout')));
+      await tester.pumpAndSettle();
+      expect(find.byType(CheckoutScreen), findsOneWidget);
+      await Scrollable.ensureVisible(
+        tester.element(find.byKey(const Key('place-order'))),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('place-order')));
+      await tester.pumpAndSettle();
+      expect(find.text('Enter your name'), findsOneWidget);
+      expect(find.text('Enter a valid PH mobile number'), findsOneWidget);
+      expect(shop.cartCount, 2);
+      await tester.enterText(
+        find.byKey(const Key('customer-name')),
+        'Juan Dela Cruz',
+      );
+      await tester.enterText(
+        find.byKey(const Key('customer-mobile')),
+        '09171234567',
+      );
+      await Scrollable.ensureVisible(
+        tester.element(find.byKey(const Key('place-order'))),
+      );
+      await tester.pumpAndSettle();
       final place = tester
           .widget<FilledButton>(find.byKey(const Key('place-order')))
           .onPressed!;
@@ -47,6 +75,11 @@ void main() {
       expect(find.byType(OrderConfirmationScreen), findsOneWidget);
       expect(find.byType(CartScreen, skipOffstage: false), findsNothing);
       expect(find.text('Demo order confirmed.'), findsOneWidget);
+      expect(find.text('Pickup for Juan Dela Cruz'), findsOneWidget);
+      expect(
+        find.text('Cash at pickup · Payment due at pickup'),
+        findsOneWidget,
+      );
       expect(
         tester
             .widget<SelectableText>(find.byKey(const Key('order-reference')))
@@ -74,6 +107,20 @@ void main() {
     'System Back after ordering from product details returns directly to menu',
     (tester) async {
       await openBag(tester, fromDetails: true);
+      await tester.tap(find.byKey(const Key('open-checkout')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('customer-name')),
+        'Ana Cruz',
+      );
+      await tester.enterText(
+        find.byKey(const Key('customer-mobile')),
+        '+639171234567',
+      );
+      await Scrollable.ensureVisible(
+        tester.element(find.byKey(const Key('place-order'))),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('place-order')));
       await tester.pumpAndSettle();
       expect(
@@ -100,7 +147,12 @@ void main() {
       for (final product in shop.products) {
         shop.addToCart(product, quantity: 2);
       }
-      final order = shop.placeDemoOrder()!;
+      final order = (await shop.submitOrder(
+        customerName: 'Guest',
+        mobileNumber: '09171234567',
+        notes: '',
+        paymentMethod: PaymentMethod.cash,
+      ))!;
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.theme,
