@@ -158,4 +158,36 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Featured carousel fits a narrow phone with enlarged fonts', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final shop = ShopController(repository: const MenuRepository());
+    addTearDown(shop.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.theme,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: MenuScreen(controller: shop),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final carousel = find.byKey(const Key('featured-carousel'));
+    expect(carousel, findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(carousel);
+    await tester.pumpAndSettle();
+    await tester.drag(carousel, const Offset(-220, 0));
+    await tester.pumpAndSettle();
+    expect(tester.widget<PageView>(carousel).controller!.page, closeTo(1, .01));
+    expect(tester.takeException(), isNull);
+  });
 }

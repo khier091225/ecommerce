@@ -244,6 +244,116 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Add feedback resets while rapid taps still increase the bag', (
+    tester,
+  ) async {
+    await openMenu(tester);
+    final add = find.byKey(const Key('add-coffee-tiramisu-latte'));
+    await tester.scrollUntilVisible(
+      add,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(CustomScrollView).first,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(add);
+    await tester.pump();
+    expect(shop.cartCount, 1);
+    expect(
+      find.descendant(of: add, matching: find.text('Added')),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(milliseconds: 70));
+    final pulse = tester.widget<ScaleTransition>(
+      find.byKey(const Key('cart-pulse')),
+    );
+    expect(pulse.scale.value, greaterThan(1));
+    await tester.tap(add);
+    await tester.pump();
+    expect(shop.cartCount, 2);
+    await tester.pump(const Duration(milliseconds: 720));
+    await tester.pump(const Duration(milliseconds: 220));
+    expect(
+      find.descendant(of: add, matching: find.text('Add')),
+      findsOneWidget,
+    );
+    expect(pulse.scale.value, closeTo(1, .001));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Featured add button confirms with a checkmark', (tester) async {
+    await openMenu(tester);
+    final add = find.byKey(const Key('featured-add-coffee-tiramisu-latte'));
+    await tester.tap(add);
+    await tester.pump();
+    expect(shop.cartCount, 1);
+    expect(
+      find.descendant(of: add, matching: find.byIcon(Icons.check)),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(milliseconds: 720));
+    await tester.pump(const Duration(milliseconds: 220));
+    expect(
+      find.descendant(of: add, matching: find.byIcon(Icons.add)),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Reduced motion keeps add feedback without moving controls', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.theme,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
+        ),
+        home: MenuScreen(controller: shop),
+      ),
+    );
+    final add = find.byKey(const Key('add-coffee-tiramisu-latte'));
+    await tester.scrollUntilVisible(
+      add,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(CustomScrollView).first,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(add);
+    await tester.pump();
+    expect(shop.cartCount, 1);
+    expect(
+      find.descendant(of: add, matching: find.text('Added')),
+      findsOneWidget,
+    );
+    final feedback = tester.widget<AnimatedScale>(
+      find.byKey(const Key('add-feedback-coffee-tiramisu-latte')),
+    );
+    expect(feedback.duration, Duration.zero);
+    expect(feedback.scale, 1);
+    expect(
+      tester
+          .widget<ScaleTransition>(find.byKey(const Key('cart-pulse')))
+          .scale
+          .value,
+      1,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Menu and bag summary accommodate larger text', (tester) async {
     shop.addToCart(shop.products.first);
     await openMenu(tester, scale: 1.6);

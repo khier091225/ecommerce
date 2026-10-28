@@ -1584,7 +1584,7 @@ class ProductImage extends StatelessWidget {
   );
 }
 
-class CartButton extends StatelessWidget {
+class CartButton extends StatefulWidget {
   const CartButton({
     super.key,
     required this.controller,
@@ -1594,16 +1594,93 @@ class CartButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
+  State<CartButton> createState() => _CartButtonState();
+}
+
+class _CartButtonState extends State<CartButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController pulse;
+  late final Animation<double> pulseScale;
+  late int previousCount;
+  bool reducedMotion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    previousCount = widget.controller.cartCount;
+    pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+    pulseScale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 1.0,
+          end: 1.2,
+        ).chain(CurveTween(curve: Curves.easeOutCubic)),
+        weight: 45,
+      ),
+      TweenSequenceItem(
+        tween: Tween(
+          begin: 1.2,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeInOutCubic)),
+        weight: 55,
+      ),
+    ]).animate(pulse);
+    widget.controller.addListener(onCartChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    reducedMotion = MediaQuery.disableAnimationsOf(context);
+    if (reducedMotion) {
+      pulse.stop();
+      pulse.value = 0;
+    }
+  }
+
+  @override
+  void didUpdateWidget(CartButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller == widget.controller) return;
+    oldWidget.controller.removeListener(onCartChanged);
+    previousCount = widget.controller.cartCount;
+    widget.controller.addListener(onCartChanged);
+  }
+
+  void onCartChanged() {
+    final count = widget.controller.cartCount;
+    if (count > previousCount && !reducedMotion) pulse.forward(from: 0);
+    previousCount = count;
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(onCartChanged);
+    pulse.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => ListenableBuilder(
-    listenable: controller,
+    listenable: widget.controller,
     builder: (context, _) => IconButton(
       tooltip: 'View cart',
-      onPressed: onPressed,
-      icon: Badge(
-        isLabelVisible: controller.cartCount > 0,
-        backgroundColor: AppColors.action,
-        label: Text('${controller.cartCount}'),
-        child: const Icon(Icons.shopping_bag_outlined, color: AppColors.white),
+      onPressed: widget.onPressed,
+      icon: ScaleTransition(
+        key: const Key('cart-pulse'),
+        scale: pulseScale,
+        child: Badge(
+          isLabelVisible: widget.controller.cartCount > 0,
+          backgroundColor: AppColors.action,
+          label: Text('${widget.controller.cartCount}'),
+          child: const Icon(
+            Icons.shopping_bag_outlined,
+            color: AppColors.white,
+          ),
+        ),
       ),
     ),
   );
@@ -2710,8 +2787,11 @@ class _ProductGridSliver extends StatelessWidget {
               mainAxisSpacing: 14,
               mainAxisExtent: math.min(cardWidth * .76, 176) + 144 * scale,
             ),
-            itemBuilder: (_, index) =>
-                ProductCard(product: products[index], controller: controller),
+            itemBuilder: (_, index) => ProductCard(
+              key: ValueKey(products[index].id),
+              product: products[index],
+              controller: controller,
+            ),
           );
         },
       ),
@@ -2753,7 +2833,7 @@ class _FeaturedCarousel extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               SizedBox(
-                height: 178 * scale.clamp(1, 1.5),
+                height: 186 * scale.clamp(1, 1.8),
                 child: PageView.builder(
                   key: const Key('featured-carousel'),
                   controller: pages,
@@ -2777,83 +2857,80 @@ class _FeaturedCarousel extends StatelessWidget {
                               ),
                             ),
                           ),
-                          child: Stack(
-                            children: [
-                              Positioned.fill(
-                                right: 0,
-                                left: null,
-                                child: SizedBox(
-                                  width: 165,
-                                  child: ProductImage(product: product),
-                                ),
-                              ),
-                              Positioned.fill(
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        AppColors.dark,
-                                        AppColors.dark,
-                                        AppColors.dark.withValues(alpha: .7),
-                                        AppColors.dark.withValues(alpha: .06),
-                                      ],
+                          child: LayoutBuilder(
+                            builder: (context, cardConstraints) {
+                              final compact = cardConstraints.maxWidth < 310;
+                              return Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    flex: compact ? 64 : 61,
+                                    child: Padding(
+                                      padding: EdgeInsets.all(
+                                        compact ? 14 : 20,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'CAFE PICK',
+                                            style: TextStyle(
+                                              color: AppColors.muted,
+                                              fontSize: 10,
+                                              letterSpacing: 1.5,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          Text(
+                                            product.name,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: AppColors.white,
+                                              fontSize: 19,
+                                              fontWeight: FontWeight.w700,
+                                              height: 1.2,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Wrap(
+                                            alignment:
+                                                WrapAlignment.spaceBetween,
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
+                                            spacing: 8,
+                                            runSpacing: 4,
+                                            children: [
+                                              Text(
+                                                pesos(product.price),
+                                                style: const TextStyle(
+                                                  color: AppColors.white,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                              _AnimatedAddButton(
+                                                key: ValueKey(
+                                                  'featured-${product.id}',
+                                                ),
+                                                product: product,
+                                                controller: controller,
+                                                iconOnly: true,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'CAFE PICK',
-                                      style: TextStyle(
-                                        color: AppColors.muted,
-                                        fontSize: 10,
-                                        letterSpacing: 1.5,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    SizedBox(
-                                      width: 180,
-                                      child: Text(
-                                        product.name,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: AppColors.white,
-                                          fontSize: 19 * scale.clamp(1, 1.3),
-                                          fontWeight: FontWeight.w700,
-                                          height: 1.2,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          pesos(product.price),
-                                          style: const TextStyle(
-                                            color: AppColors.white,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        IconButton.filledTonal(
-                                          tooltip: 'Add ${product.name} to bag',
-                                          onPressed: () =>
-                                              controller.addToCart(product),
-                                          icon: const Icon(Icons.add, size: 18),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                                  Expanded(
+                                    flex: compact ? 36 : 39,
+                                    child: ProductImage(product: product),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -3072,6 +3149,159 @@ class MenuFilters extends StatelessWidget {
 // ============================================================
 // PRODUCT CARD
 // ============================================================
+class _AnimatedAddButton extends StatefulWidget {
+  const _AnimatedAddButton({
+    super.key,
+    required this.product,
+    required this.controller,
+    this.shortLabel = false,
+    this.iconOnly = false,
+  });
+
+  final Product product;
+  final ShopController controller;
+  final bool shortLabel;
+  final bool iconOnly;
+
+  @override
+  State<_AnimatedAddButton> createState() => _AnimatedAddButtonState();
+}
+
+class _AnimatedAddButtonState extends State<_AnimatedAddButton> {
+  Timer? resetTimer;
+  Timer? pressTimer;
+  bool added = false;
+  bool pressed = false;
+
+  @override
+  void didUpdateWidget(_AnimatedAddButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.product.id == widget.product.id) return;
+    resetTimer?.cancel();
+    pressTimer?.cancel();
+    added = false;
+    pressed = false;
+  }
+
+  void addProduct() {
+    final previousCount = widget.controller.cartCount;
+    widget.controller.addToCart(widget.product);
+    if (widget.controller.cartCount == previousCount) return;
+    resetTimer?.cancel();
+    pressTimer?.cancel();
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    setState(() {
+      added = true;
+      pressed = !reduceMotion;
+    });
+    if (!reduceMotion) {
+      pressTimer = Timer(const Duration(milliseconds: 110), () {
+        if (mounted) setState(() => pressed = false);
+      });
+    }
+    resetTimer = Timer(const Duration(milliseconds: 700), () {
+      if (mounted) setState(() => added = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    resetTimer?.cancel();
+    pressTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final colorDuration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
+    final scaleDuration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 110);
+    return Tooltip(
+      message: added
+          ? 'Add another ${widget.product.name} to bag'
+          : 'Add ${widget.product.name} to bag',
+      child: AnimatedScale(
+        key: Key(
+          widget.iconOnly
+              ? 'featured-add-feedback-${widget.product.id}'
+              : 'add-feedback-${widget.product.id}',
+        ),
+        scale: reduceMotion ? 1 : (pressed ? .96 : 1),
+        duration: scaleDuration,
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: colorDuration,
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            color: widget.iconOnly
+                ? added
+                      ? AppColors.teal
+                      : AppColors.softTeal
+                : added
+                ? AppColors.teal
+                : AppColors.action,
+            borderRadius: BorderRadius.circular(widget.iconOnly ? 30 : 12),
+          ),
+          child: widget.iconOnly
+              ? IconButton(
+                  key: Key('featured-add-${widget.product.id}'),
+                  onPressed: addProduct,
+                  icon: AnimatedSwitcher(
+                    duration: colorDuration,
+                    child: Icon(
+                      added ? Icons.check : Icons.add,
+                      key: ValueKey(added),
+                      size: 18,
+                      color: added ? AppColors.white : AppColors.dark,
+                    ),
+                  ),
+                )
+              : FilledButton(
+                  key: Key('add-${widget.product.id}'),
+                  onPressed: addProduct,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 10,
+                    ),
+                    minimumSize: const Size(68, 48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: colorDuration,
+                    child: Row(
+                      key: ValueKey(added),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!added || !widget.shortLabel) ...[
+                          Icon(added ? Icons.check : Icons.add, size: 17),
+                          const SizedBox(width: 8),
+                        ],
+                        Text(
+                          added
+                              ? 'Added'
+                              : widget.shortLabel
+                              ? 'Add'
+                              : 'Add to bag',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
 class ProductCard extends StatelessWidget {
   const ProductCard({
     super.key,
@@ -3203,28 +3433,10 @@ class ProductCard extends StatelessWidget {
                           color: AppColors.dark,
                         ),
                       );
-                      final add = Tooltip(
-                        message: 'Add ${product.name} to cart',
-                        child: FilledButton.icon(
-                          key: Key('add-${product.id}'),
-                          onPressed: () => controller.addToCart(product),
-                          icon: const Icon(Icons.add, size: 17),
-                          label: Text(
-                            constraints.maxWidth >= 230 * scale
-                                ? 'Add to bag'
-                                : 'Add',
-                          ),
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 10,
-                            ),
-                            minimumSize: const Size(68, 48),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
+                      final add = _AnimatedAddButton(
+                        product: product,
+                        controller: controller,
+                        shortLabel: constraints.maxWidth < 230 * scale,
                       );
                       if (stacked) {
                         return Column(
