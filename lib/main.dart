@@ -1498,19 +1498,32 @@ class StartScreen extends StatefulWidget {
 }
 
 class _StartScreenState extends State<StartScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _animation;
+  late final AnimationController _idle;
   bool? _reducedMotion;
   bool _leaving = false;
+  bool _foreground = true;
 
   @override
   void initState() {
     super.initState();
-    _animation = AnimationController(
+    WidgetsBinding.instance.addObserver(this);
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _foreground = lifecycle == null || lifecycle == AppLifecycleState.resumed;
+    _idle = AnimationController(
       vsync: this,
-      duration: StartScreen.duration,
+      duration: const Duration(seconds: 10),
       animationBehavior: AnimationBehavior.preserve,
     );
+    _animation =
+        AnimationController(
+          vsync: this,
+          duration: StartScreen.duration,
+          animationBehavior: AnimationBehavior.preserve,
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.completed) _syncMotion();
+        });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       // Decode the initial menu images while the intro is playing.
@@ -1530,18 +1543,34 @@ class _StartScreenState extends State<StartScreen>
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     if (_reducedMotion == reduceMotion) return;
     _reducedMotion = reduceMotion;
-    if (reduceMotion) {
+    _syncMotion();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    _syncMotion();
+  }
+
+  void _syncMotion() {
+    if (_reducedMotion == true) {
       _animation.stop();
-      _animation.value = 1;
-    } else if (!_leaving) {
-      _animation.forward(from: 0);
+      _idle.stop();
+      if (_animation.value != 1) _animation.value = 1;
+    } else if (_reducedMotion != false || _leaving || !_foreground) {
+      _animation.stop();
+      _idle.stop();
+    } else if (_animation.isCompleted) {
+      if (!_idle.isAnimating) _idle.repeat();
+    } else if (!_animation.isAnimating) {
+      _animation.forward();
     }
   }
 
   Future<void> _openMenu() async {
     if (!mounted || _leaving) return;
     setState(() => _leaving = true);
-    _animation.stop();
+    _syncMotion();
     try {
       await Navigator.push<void>(
         context,
@@ -1553,16 +1582,16 @@ class _StartScreenState extends State<StartScreen>
     } finally {
       if (mounted) {
         setState(() => _leaving = false);
-        if (_reducedMotion == false && !_animation.isCompleted) {
-          _animation.forward();
-        }
+        _syncMotion();
       }
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _animation.dispose();
+    _idle.dispose();
     super.dispose();
   }
 
@@ -1640,12 +1669,16 @@ class _StartScreenState extends State<StartScreen>
                                     label: 'A floating Smooch Cafe cup with orbiting coffee beans and rising steam',
                                     image: true,
                                     child: ExcludeSemantics(
-                                      child: CustomPaint(
-                                        key: const Key('coffee-scene'),
-                                        painter: CoffeeScenePainter(
-                                          progress: progress,
-                                          reducedMotion:
-                                              _reducedMotion ?? false,
+                                      child: AnimatedBuilder(
+                                        animation: _idle,
+                                        builder: (context, _) => CustomPaint(
+                                          key: const Key('coffee-scene'),
+                                          painter: CoffeeScenePainter(
+                                            progress: progress,
+                                            idlePhase: _idle.value,
+                                            reducedMotion:
+                                                _reducedMotion ?? false,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -2184,7 +2217,9 @@ class _MenuScreenState extends State<MenuScreen> {
                               ? math
                                     .max(1, (width / (240 * scale)).floor())
                                     .clamp(1, 4)
-                              : width >= 1000
+                              : width >= 1040
+                              ? 5
+                              : width >= 900
                               ? 4
                               : width >= 700
                               ? 3
@@ -2192,17 +2227,17 @@ class _MenuScreenState extends State<MenuScreen> {
                               ? 2
                               : 1;
                           final cardWidth =
-                              (width - 16 * (columns - 1)) / columns;
+                              (width - 12 * (columns - 1)) / columns;
                           return SliverGrid.builder(
                             itemCount: items.length,
                             gridDelegate:
                                 SliverGridDelegateWithFixedCrossAxisCount(
                                   crossAxisCount: columns,
-                                  crossAxisSpacing: 16,
-                                  mainAxisSpacing: 18,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 14,
                                   mainAxisExtent:
-                                      math.min(cardWidth * .9, 250) +
-                                      192 * scale,
+                                      math.min(cardWidth * .76, 176) +
+                                      144 * scale,
                                 ),
                             itemBuilder: (_, index) => ProductCard(
                               product: items[index],
@@ -2612,7 +2647,7 @@ class ProductCard extends StatelessWidget {
     return Material(
       color: AppColors.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         side: const BorderSide(color: AppColors.border),
       ),
       clipBehavior: Clip.antiAlias,
@@ -2711,7 +2746,7 @@ class ProductCard extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -2724,7 +2759,7 @@ class ProductCard extends StatelessWidget {
                       color: AppColors.secondaryText,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   SizedBox(
                     height: MediaQuery.textScalerOf(context).scale(15) * 2.7,
                     child: Text(
@@ -2738,37 +2773,61 @@ class ProductCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    pesos(product.price),
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.dark,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: Tooltip(
-                      message: 'Add ${product.name} to cart',
-                      child: FilledButton.icon(
-                        key: Key('add-${product.id}'),
-                        onPressed: () => controller.addToCart(product),
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Add to bag'),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 12,
+                  const SizedBox(height: 8),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final scale =
+                          MediaQuery.textScalerOf(context).scale(13) / 13;
+                      final stacked = constraints.maxWidth < 150 * scale;
+                      final price = Text(
+                        pesos(product.price),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.dark,
+                        ),
+                      );
+                      final add = Tooltip(
+                        message: 'Add ${product.name} to cart',
+                        child: FilledButton.icon(
+                          key: Key('add-${product.id}'),
+                          onPressed: () => controller.addToCart(product),
+                          icon: const Icon(Icons.add, size: 17),
+                          label: Text(
+                            constraints.maxWidth >= 230 * scale
+                                ? 'Add to bag'
+                                : 'Add',
                           ),
-                          minimumSize: const Size(48, 48),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 10,
+                            ),
+                            minimumSize: const Size(68, 48),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
+                      );
+                      if (stacked) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            price,
+                            const SizedBox(height: 8),
+                            SizedBox(width: double.infinity, child: add),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Expanded(child: price),
+                          const SizedBox(width: 8),
+                          add,
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -3392,10 +3451,15 @@ class _CafeInfo extends StatelessWidget {
 // A small perspective renderer: the cup is a shaded surface of revolution.
 // Faces are sorted by depth; visible lettering follows the curved cup surface.
 class CoffeeScenePainter extends CustomPainter {
-  CoffeeScenePainter({required this.progress, required this.reducedMotion});
+  CoffeeScenePainter({
+    required this.progress,
+    required this.reducedMotion,
+    this.idlePhase = 0,
+  });
 
   final double progress;
   final bool reducedMotion;
+  final double idlePhase;
   static const _cream = Color(0xFFF5E8D6);
   static const _lid = Color(0xFFFFF5E8);
   static const _light = _Vector(-.45, .65, 1);
@@ -3403,18 +3467,25 @@ class CoffeeScenePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final time = reducedMotion ? 1.0 : progress;
+    final idleAngle = reducedMotion ? 0.0 : idlePhase * math.pi * 2;
     final arrival = reducedMotion
         ? 1.0
         : Curves.easeOutBack.transform((time / .25).clamp(0.0, 1.0));
     final turn = Curves.easeInOutCubic.transform(
       ((time - .05) / .78).clamp(0.0, 1.0),
     );
-    final yaw = reducedMotion ? -.14 : -.65 + math.pi * 2 * turn + .51 * turn;
-    final tilt = reducedMotion ? .27 : .27 + math.sin(time * math.pi * 2) * .08;
+    final yaw = reducedMotion
+        ? -.14
+        : -.65 + math.pi * 2 * turn + .51 * turn + math.sin(idleAngle) * .18;
+    final tilt = reducedMotion
+        ? .27
+        : .27 + math.sin(time * math.pi * 2 + idleAngle) * .08;
     final roll = reducedMotion
         ? -.08
-        : -.08 + math.sin(time * math.pi * 2) * .1;
-    final float = reducedMotion ? 0.0 : math.sin(time * math.pi * 3) * .09;
+        : -.08 + math.sin(time * math.pi * 2 + idleAngle) * .1;
+    final float = reducedMotion
+        ? 0.0
+        : math.sin(time * math.pi * 3 + idleAngle) * .09;
     final unit = math.min(size.width / 4.5, size.height / 4.25);
     final center = Offset(size.width / 2, size.height * .51);
 
@@ -3662,7 +3733,8 @@ class CoffeeScenePainter extends CustomPainter {
 
     for (var i = 0; i < 5; i++) {
       final angle =
-          i * math.pi * 2 / 5 + (reducedMotion ? .3 : time * math.pi * 2 * .8);
+          i * math.pi * 2 / 5 +
+          (reducedMotion ? .3 : time * math.pi * 2 * .8 + idleAngle);
       final position = _Vector(
         math.cos(angle) * 1.74,
         math.sin(angle * 1.4 + i) * .8 + .1,
@@ -3741,7 +3813,9 @@ class CoffeeScenePainter extends CustomPainter {
 
     // Steam is intentionally soft and sparse, keeping the cup as the focal point.
     for (var i = 0; i < 3; i++) {
-      final phase = reducedMotion ? .45 + i * .1 : (time * 1.8 + i / 3) % 1;
+      final phase = reducedMotion
+          ? .45 + i * .1
+          : (time * 1.8 + idlePhase * 2 + i / 3) % 1;
       final alpha = math.sin(phase * math.pi) * .24 * arrival.clamp(0, 1);
       final start = project(_Vector((i - 1) * .25, 1.46 + phase * .5, 0));
       final drift = math.sin(phase * math.pi * 2 + i) * unit * .13;
@@ -3767,12 +3841,14 @@ class CoffeeScenePainter extends CustomPainter {
     }
 
     for (var i = 0; i < 10; i++) {
-      final angle = i * 2.4 + (reducedMotion ? 0 : time * .6);
+      final angle = i * 2.4 + (reducedMotion ? 0 : time * .6 + idleAngle);
       final distance = 1.55 + (i % 3) * .22;
       final point = project(
         _Vector(math.cos(angle) * distance, math.sin(angle) * 1.5, -.5),
       );
-      final pulse = reducedMotion ? .6 : .45 + .3 * math.sin(time * 8 + i);
+      final pulse = reducedMotion
+          ? .6
+          : .45 + .3 * math.sin(time * 8 + idleAngle + i);
       canvas.drawCircle(
         point,
         i % 3 == 0 ? 2.1 : 1.2,
@@ -3787,6 +3863,7 @@ class CoffeeScenePainter extends CustomPainter {
   @override
   bool shouldRepaint(CoffeeScenePainter oldDelegate) =>
       progress != oldDelegate.progress ||
+      idlePhase != oldDelegate.idlePhase ||
       reducedMotion != oldDelegate.reducedMotion;
 }
 

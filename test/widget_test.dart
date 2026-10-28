@@ -4,6 +4,67 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ecommerce/main.dart';
 
 void main() {
+  testWidgets(
+    '3D idle motion continues, pauses offscreen and resumes on return',
+    (tester) async {
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
+      CoffeeScenePainter scene() =>
+          tester
+                  .widget<CustomPaint>(
+                    find.byKey(const Key('coffee-scene'), skipOffstage: false),
+                  )
+                  .painter!
+              as CoffeeScenePainter;
+
+      await tester.pumpWidget(const MiniShopApp());
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pump(const Duration(milliseconds: 100));
+      final initial = scene().idlePhase;
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(scene().progress, 1);
+      expect(scene().idlePhase, isNot(initial));
+      expect(find.byType(MenuScreen), findsNothing);
+      // Cross more than one idle-loop boundary; the intro stays completed.
+      final firstLoop = scene().idlePhase;
+      await tester.pump(const Duration(milliseconds: 12300));
+      expect(scene().idlePhase, isNot(firstLoop));
+      expect(scene().progress, 1);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      final paused = scene().idlePhase;
+      await tester.pump(const Duration(seconds: 2));
+      expect(scene().idlePhase, paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(scene().idlePhase, isNot(paused));
+
+      await tester.ensureVisible(find.byKey(const Key('enter-store')));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byKey(const Key('enter-store')));
+      await tester.pumpAndSettle();
+      expect(tester.hasRunningAnimations, isFalse);
+      final hidden = scene().idlePhase;
+      await tester.pump(const Duration(seconds: 2));
+      expect(scene().idlePhase, hidden);
+
+      await tester.tap(find.byTooltip('Back to start'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
+      final returned = scene().idlePhase;
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(scene().idlePhase, isNot(returned));
+      expect(find.byType(StartScreen), findsOneWidget);
+      expect(find.byType(MenuScreen), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Shop Now, search, details, quantity changes, and empty cart', (
     tester,
   ) async {
@@ -16,7 +77,7 @@ void main() {
     expect(find.byType(StartScreen), findsOneWidget);
     expect(find.byKey(const Key('coffee-scene')), findsOneWidget);
     await tester.ensureVisible(find.byKey(const Key('enter-store')));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 100));
     await tester.tap(find.byKey(const Key('enter-store')));
     await tester.pumpAndSettle();
     expect(find.byType(StartScreen), findsNothing);
@@ -126,7 +187,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 1800));
       expect(tester.takeException(), isNull);
       await tester.ensureVisible(find.byKey(const Key('enter-store')));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.tap(find.byKey(const Key('enter-store')));
       await tester.pumpAndSettle();
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -550));
@@ -144,7 +205,7 @@ void main() {
       expect(find.byType(StartScreen), findsOneWidget);
       expect(find.byType(MenuScreen), findsNothing);
       await tester.ensureVisible(find.byKey(const Key('enter-store')));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.tap(find.byKey(const Key('enter-store')));
       await tester.pumpAndSettle();
       final menuContext = tester.element(find.byType(MenuScreen));
@@ -152,7 +213,8 @@ void main() {
       expect(ModalRoute.of(menuContext)!.settings.name, MenuScreen.routeName);
       expect(Navigator.of(menuContext).canPop(), isTrue);
       await tester.tap(find.byTooltip('Back to start'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
       expect(find.byType(StartScreen), findsOneWidget);
       expect(find.byType(MenuScreen), findsNothing);
       expect(
@@ -197,11 +259,12 @@ void main() {
       expect(shop.total, 145);
       expect(shop.favorites, hasLength(1));
       await tester.tap(find.byTooltip('Back to start'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 700));
       expect(find.byType(StartScreen), findsOneWidget);
       expect(find.byType(MenuScreen), findsNothing);
       await tester.ensureVisible(find.byKey(const Key('enter-store')));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.tap(find.byKey(const Key('enter-store')));
       await tester.pumpAndSettle();
       expect(
@@ -236,7 +299,7 @@ void main() {
       expect(find.byType(MenuScreen), findsNothing);
       expect(tester.hasRunningAnimations, isFalse);
       await tester.ensureVisible(find.byKey(const Key('enter-store')));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.tap(find.byKey(const Key('enter-store')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 16));
@@ -264,7 +327,7 @@ void main() {
       await tester.pumpWidget(const MiniShopApp());
       await tester.pump(const Duration(milliseconds: 1800));
       await tester.ensureVisible(find.byKey(const Key('enter-store')));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.tap(find.byKey(const Key('enter-store')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
@@ -320,9 +383,9 @@ void main() {
           home: StartScreen(controller: controller),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 5));
       await tester.ensureVisible(find.byKey(const Key('enter-store')));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
       expect(
         find.byKey(const Key('enter-store')).hitTestable(),
         findsOneWidget,

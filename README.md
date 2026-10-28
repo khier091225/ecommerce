@@ -17,7 +17,7 @@ An installable debug APK is available after `flutter build apk --debug` at `buil
 
 ## Included
 
-- A 3D Start Screen with a shaded coffee cup, orbiting beans, steam, the Smooch logo, and a primary SHOP NOW button. The intro settles after 4.6 seconds and waits for the user to enter.
+- A 3D Start Screen with a shaded coffee cup, orbiting beans, steam, the Smooch logo, and a primary SHOP NOW button. After the 4.6-second intro, gentle cup motion, beans, and steam loop while waiting for the user to enter. Motion pauses in the menu or background and resumes on return; reduced-motion settings keep the scene still.
 - SHOP NOW opens the menu using `Navigator.push()` and `MaterialPageRoute`. Back returns to the Start Screen; cart and favorites remain available when entering again. Rapid taps open one menu. Reduced-motion settings show a still composition.
 - A coordinated 600 ms transition fades through teal before gently revealing the menu, configured through the Material page transition theme. Initial menu images are preloaded during the intro, and menu controls become active when the transition finishes.
 - All 92 products from `SmoochCafe/pages/products.html`, using its names, prices, categories, and local product images.
@@ -25,7 +25,7 @@ An installable debug APK is available after `flutter build apk --debug` at `buil
 - Search matches words in any order and ignores extra whitespace. Clearing search preserves the chosen category and sort order.
 - Every `Product.category` matches a filter choice. Descriptive product labels, such as Quarter Pounder or Brownies, are kept in `Product.subcategory` and remain searchable.
 - Product details, a favorites list, and browsing positions retained when switching tabs.
-- Clear product-card add buttons, in-bag quantities, and a persistent bag summary with Philippine peso totals.
+- Compact product cards with shorter photos, price/Add controls side by side, and up to five columns on wide screens. Cards adapt for larger text and retain in-bag quantities and a persistent bag summary with Philippine peso totals.
 - Shared cart with quantities, item removal, and a live badge.
 - Preview checkout with an order summary. It does not submit orders or process payments.
 - Cafe location, hours, phone number, and email copied from the supplied website.
