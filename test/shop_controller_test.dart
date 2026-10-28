@@ -72,6 +72,34 @@ void main() {
     expect(shop.favorites, isEmpty);
   });
 
+  test(
+    'Placing demo orders snapshots items and totals with sequential references',
+    () {
+      expect(shop.placeDemoOrder(), isNull);
+      final first = shop.products.first;
+      final second = shop.products[1];
+      shop.addToCart(first, quantity: 2);
+      shop.addToCart(second);
+      shop.toggleFavorite(first);
+      final order = shop.placeDemoOrder()!;
+      expect(order.reference, 'SMC-0001');
+      expect(order.itemCount, 3);
+      expect(order.total, first.price * 2 + second.price);
+      expect(shop.cartCount, 0);
+      expect(shop.total, 0);
+      expect(shop.favorites, [first]);
+      expect(shop.placeDemoOrder(), isNull);
+      shop.addToCart(first, quantity: 4);
+      expect(order.items.first.quantity, 2);
+      expect(order.total, first.price * 2 + second.price);
+      expect(() => order.items.clear(), throwsUnsupportedError);
+      final next = shop.placeDemoOrder()!;
+      expect(next.reference, 'SMC-0002');
+      expect(next.itemCount, 4);
+      expect(next.total, first.price * 4);
+    },
+  );
+
   test('Every category filters the expected products and preserves subcategory search', () {
     const expectedCounts = {
       'Coffee': 13,

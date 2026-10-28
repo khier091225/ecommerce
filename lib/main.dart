@@ -174,7 +174,7 @@ class _CafePageTransitionsBuilder extends PageTransitionsBuilder {
 }
 
 // ============================================================
-// PRODUCT AND CART MODELS
+// PRODUCT, CART, AND ORDER MODELS
 // ============================================================
 @immutable
 class Product {
@@ -209,6 +209,17 @@ class CartItem {
 }
 
 String pesos(num amount) => '\u20b1${amount.toStringAsFixed(2)}';
+
+@immutable
+class OrderReceipt {
+  OrderReceipt({required this.reference, required List<CartItem> items})
+    : items = List.unmodifiable(items);
+
+  final String reference;
+  final List<CartItem> items;
+  int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
+  int get total => items.fold(0, (sum, item) => sum + item.total);
+}
 
 // ============================================================
 // PRODUCT DATA
@@ -1167,6 +1178,7 @@ class ShopController extends ChangeNotifier {
   final MenuRepository repository;
   final Map<String, CartItem> _cart = {};
   final Set<String> _favorites = {};
+  int _nextOrderNumber = 1;
   String _query = '';
   String _category = 'All';
   MenuSort _sort = MenuSort.recommended;
@@ -1281,6 +1293,17 @@ class ShopController extends ChangeNotifier {
   void remove(Product product) {
     _cart.remove(product.id);
     notifyListeners();
+  }
+
+  OrderReceipt? placeDemoOrder() {
+    if (_cart.isEmpty) return null;
+    final order = OrderReceipt(
+      reference: 'SMC-${(_nextOrderNumber++).toString().padLeft(4, '0')}',
+      items: cartItems,
+    );
+    _cart.clear();
+    notifyListeners();
+    return order;
   }
 }
 
@@ -2891,73 +2914,34 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
 // ============================================================
 // CART SCREEN
 // ============================================================
-class CartScreen extends StatelessWidget {
+class CartScreen extends StatefulWidget {
   const CartScreen({super.key, required this.controller});
   final ShopController controller;
 
-  void reviewOrder(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        title: Text('Your happy little order.', style: displayStyle(28)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Eyebrow('Demo checkout'),
-              const SizedBox(height: 20),
-              for (final item in controller.cartItems)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${item.quantity} × ${item.product.name}',
-                          style: const TextStyle(fontSize: 12, height: 1.6),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Text(
-                        pesos(item.total),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              const Divider(),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Expanded(child: Text('Total')),
-                  Text(
-                    pesos(controller.total),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'This is a preview checkout. Orders and payments are not submitted. Your bag will stay saved while you browse.',
-                style: TextStyle(
-                  color: AppColors.secondaryText,
-                  fontSize: 12,
-                  height: 1.7,
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Back to my bag'),
-          ),
-        ],
+  @override
+  State<CartScreen> createState() => _CartScreenState();
+}
+
+class _CartScreenState extends State<CartScreen> {
+  OrderReceipt? _submittedOrder;
+  ShopController get controller => widget.controller;
+  // Keep the reviewed bag visible while the confirmation transitions in.
+  List<CartItem> get items => _submittedOrder?.items ?? controller.cartItems;
+  int get itemCount => _submittedOrder?.itemCount ?? controller.cartCount;
+  int get orderTotal => _submittedOrder?.total ?? controller.total;
+
+  void _placeOrder() {
+    if (_submittedOrder != null) return;
+    final order = controller.placeDemoOrder();
+    if (order == null) return;
+    setState(() => _submittedOrder = order);
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    Navigator.of(context).pushAndRemoveUntil<void>(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: OrderConfirmationScreen.routeName),
+        builder: (_) => OrderConfirmationScreen(order: order),
       ),
+      (route) => route.settings.name == MenuScreen.routeName || route.isFirst,
     );
   }
 
@@ -2968,7 +2952,7 @@ class CartScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Your bag', style: TextStyle(fontSize: 16)),
       ),
-      body: controller.cartItems.isEmpty
+      body: items.isEmpty
           ? Center(
               child: SingleChildScrollView(
                 child: EmptyState(
@@ -3000,7 +2984,7 @@ class CartScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            '${controller.cartCount} ${controller.cartCount == 1 ? 'item' : 'items'} to brighten your day.',
+                            '$itemCount ${itemCount == 1 ? 'item' : 'items'} to brighten your day.',
                             style: const TextStyle(
                               color: AppColors.secondaryText,
                               fontSize: 12,
@@ -3012,9 +2996,9 @@ class CartScreen extends StatelessWidget {
                   ),
                 ),
                 SliverList.builder(
-                  itemCount: controller.cartItems.length,
+                  itemCount: items.length,
                   itemBuilder: (context, index) {
-                    final item = controller.cartItems[index];
+                    final item = items[index];
                     return ContentWidth(
                       child: Padding(
                         padding: const EdgeInsets.only(bottom: 14),
@@ -3026,7 +3010,7 @@ class CartScreen extends StatelessWidget {
                 const SliverToBoxAdapter(child: SizedBox(height: 20)),
               ],
             ),
-      bottomNavigationBar: controller.cartItems.isEmpty
+      bottomNavigationBar: items.isEmpty
           ? null
           : ColoredBox(
               color: AppColors.surface,
@@ -3042,7 +3026,7 @@ class CartScreen extends StatelessWidget {
                             const Text('Total', style: TextStyle(fontSize: 16)),
                             const Spacer(),
                             Text(
-                              pesos(controller.total),
+                              pesos(orderTotal),
                               key: const Key('cart-total'),
                               style: const TextStyle(
                                 fontSize: 23,
@@ -3055,10 +3039,11 @@ class CartScreen extends StatelessWidget {
                         const Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            'Menu prices in Philippine pesos.',
+                            'Demo order only. No payment or cafe submission.',
                             style: TextStyle(
                               color: AppColors.secondaryText,
-                              fontSize: 10,
+                              fontSize: 12,
+                              height: 1.5,
                             ),
                           ),
                         ),
@@ -3066,10 +3051,13 @@ class CartScreen extends StatelessWidget {
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
-                            onPressed: () => reviewOrder(context),
+                            key: const Key('place-order'),
+                            onPressed: _submittedOrder == null
+                                ? _placeOrder
+                                : null,
                             iconAlignment: IconAlignment.end,
                             icon: const Icon(Icons.arrow_forward, size: 18),
-                            label: const Text('Review order'),
+                            label: const Text('Place Order'),
                           ),
                         ),
                       ],
@@ -3175,6 +3163,225 @@ class _CartRow extends StatelessWidget {
           ],
         );
       },
+    ),
+  );
+}
+
+// ============================================================
+// ORDER CONFIRMATION
+// ============================================================
+class OrderConfirmationScreen extends StatelessWidget {
+  const OrderConfirmationScreen({super.key, required this.order});
+  static const routeName = '/order-confirmation';
+  final OrderReceipt order;
+
+  void _continueShopping(BuildContext context) {
+    Navigator.of(context).popUntil(
+      (route) => route.settings.name == MenuScreen.routeName || route.isFirst,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('Order confirmation', style: TextStyle(fontSize: 16)),
+      leading: IconButton(
+        tooltip: 'Back to menu',
+        onPressed: () => _continueShopping(context),
+        icon: const Icon(Icons.arrow_back),
+      ),
+    ),
+    body: SingleChildScrollView(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    decoration: const BoxDecoration(
+                      color: AppColors.softTeal,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      color: AppColors.dark,
+                      size: 44,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    'Demo order confirmed.',
+                    style: displayStyle(32),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Thanks for a little Smooch. Your order details are below.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.secondaryText,
+                    fontSize: 14,
+                    height: 1.6,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Eyebrow('Order reference'),
+                      const SizedBox(height: 8),
+                      SelectableText(
+                        order.reference,
+                        key: const Key('order-reference'),
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.dark,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'} · Demo order',
+                        style: const TextStyle(
+                          color: AppColors.secondaryText,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Divider(),
+                      for (final item in order.items)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                item.product.name,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.4,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                item.product.subcategory,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.secondaryText,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Wrap(
+                                alignment: WrapAlignment.spaceBetween,
+                                spacing: 16,
+                                runSpacing: 6,
+                                children: [
+                                  Text(
+                                    '${item.quantity} × ${pesos(item.product.price)}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.secondaryText,
+                                    ),
+                                  ),
+                                  Text(
+                                    pesos(item.total),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      const Divider(),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 16,
+                        runSpacing: 8,
+                        children: [
+                          const Text(
+                            'Total',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            pesos(order.total),
+                            key: const Key('confirmation-total'),
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.dark,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'This is a demo confirmation. Nothing was sent to the cafe, and no payment was taken.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.secondaryText,
+                    height: 1.6,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+    bottomNavigationBar: ColoredBox(
+      color: AppColors.surface,
+      child: SafeArea(
+        top: false,
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  key: const Key('continue-shopping'),
+                  onPressed: () => _continueShopping(context),
+                  iconAlignment: IconAlignment.end,
+                  icon: const Icon(Icons.arrow_forward, size: 18),
+                  label: const Text('Continue Shopping'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     ),
   );
 }

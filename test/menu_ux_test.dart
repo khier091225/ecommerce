@@ -157,25 +157,24 @@ void main() {
     },
   );
 
-  testWidgets(
-    'Clear search preserves category and sort on desktop',
-    (tester) async {
-      shop.selectCategory('Coffee');
-      shop.sortBy(MenuSort.priceLow);
-      shop.search('latte');
-      await openMenu(tester, size: const Size(1440, 1000));
-      expect(find.byTooltip('Previous categories'), findsNothing);
-      expect(find.byTooltip('Next categories'), findsNothing);
-      expect(find.byTooltip('Browse categories'), findsNothing);
-      await tester.tap(find.byTooltip('Clear search'));
-      await tester.pumpAndSettle();
-      expect(shop.query, isEmpty);
-      expect(shop.category, 'Coffee');
-      expect(shop.sort, MenuSort.priceLow);
-      expect(shop.filteredProducts, hasLength(13));
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('Clear search preserves category and sort on desktop', (
+    tester,
+  ) async {
+    shop.selectCategory('Coffee');
+    shop.sortBy(MenuSort.priceLow);
+    shop.search('latte');
+    await openMenu(tester, size: const Size(1440, 1000));
+    expect(find.byTooltip('Previous categories'), findsNothing);
+    expect(find.byTooltip('Next categories'), findsNothing);
+    expect(find.byTooltip('Browse categories'), findsNothing);
+    await tester.tap(find.byTooltip('Clear search'));
+    await tester.pumpAndSettle();
+    expect(shop.query, isEmpty);
+    expect(shop.category, 'Coffee');
+    expect(shop.sort, MenuSort.priceLow);
+    expect(shop.filteredProducts, hasLength(13));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('Add button updates the persistent bag total and opens cart', (
     tester,

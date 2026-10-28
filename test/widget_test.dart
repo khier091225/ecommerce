@@ -123,11 +123,6 @@ void main() {
       tester.widget<Text>(find.byKey(const Key('cart-total'))).data,
       '₱290.00',
     );
-    await tester.tap(find.text('Review order'));
-    await tester.pumpAndSettle();
-    expect(find.text('DEMO CHECKOUT'), findsOneWidget);
-    await tester.tap(find.text('Back to my bag'));
-    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Remove Tiramisu Latte'));
     await tester.pumpAndSettle();
     expect(find.text('A little empty, for now.'), findsOneWidget);

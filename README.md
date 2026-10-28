@@ -27,11 +27,11 @@ An installable debug APK is available after `flutter build apk --debug` at `buil
 - Product details, a favorites list, and browsing positions retained when switching tabs.
 - Compact product cards with shorter photos, price/Add controls side by side, and up to five columns on wide screens. Cards adapt for larger text and retain in-bag quantities and a persistent bag summary with Philippine peso totals.
 - Shared cart with quantities, item removal, and a live badge.
-- Preview checkout with an order summary. It does not submit orders or process payments.
+- Place Order opens a demo confirmation with an order reference, products, quantities, and total. The completed bag is cleared, while the receipt keeps its original details. Continue Shopping and Back return to the menu, including when the bag was opened from product details. No orders or payments are sent to the cafe.
 - Cafe location, hours, phone number, and email copied from the supplied website.
 - Responsive phone, tablet, and desktop layouts, plus widget previews at the end of `lib/main.dart`.
 
-Cart and favorites are kept in memory during the app session. Restarting the app resets them. The app has no backend or account system.
+Cart and favorites are kept in memory during the app session. Demo order references are numbered within that session. Restarting the app resets this state. The app has no backend or account system.
 
 ## Design
 
@@ -46,7 +46,7 @@ lib/
   main.dart                  Complete application, following the starter layout
 ```
 
-All application Dart code is in `lib/main.dart`, just like the supplied base code. `main()` runs `MiniShopApp`. Section comments separate colors/theme, product models and data, shopping state, the main application, shared widgets, Start Screen/transition, menu/filter controls, product cards, product details, cart, cafe information, the 3D painter, and widget previews. There are no local Dart imports or `part` files.
+All application Dart code is in `lib/main.dart`, just like the supplied base code. `main()` runs `MiniShopApp`. Section comments separate colors/theme, product models and data, shopping state, the main application, shared widgets, Start Screen/transition, menu/filter controls, product cards, product details, cart, order confirmation, cafe information, the 3D painter, and widget previews. There are no local Dart imports or `part` files.
 
 Product photos, the logo, and cafe images are in `assets/images/`; fonts are in `assets/fonts/`. Both are declared in `pubspec.yaml`. Tests live under `test/` and import `main.dart`.
 
@@ -69,4 +69,4 @@ flutter test
 flutter build web
 ```
 
-The tests cover catalog assets and IDs, exact category matching, subcategory search, search/category combinations and recovery, sorting, same-name product variants, cart totals and removal, favorites, persistent bag actions, pinned filters, tab scroll restoration, larger text, key color contrast pairs, waiting for SHOP NOW, MaterialPageRoute navigation, rapid taps, Back/re-entry with retained shopping state, reduced motion, animation disposal, product quantity selection, preview checkout, and layouts at 320, 390, 768, and 1440 pixels.
+The tests cover catalog assets and IDs, exact category matching, subcategory search, search/category combinations and recovery, sorting, same-name product variants, cart totals and removal, favorites, persistent bag actions, pinned filters, tab scroll restoration, larger text, key color contrast pairs, waiting for SHOP NOW, MaterialPageRoute navigation, rapid taps, Back/re-entry with retained shopping state, reduced motion, animation disposal, product quantity selection, immutable demo-order receipts and references, confirmation navigation, long orders with larger text, and layouts at 320, 390, 768, and 1440 pixels.
