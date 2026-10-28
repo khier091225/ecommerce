@@ -90,7 +90,9 @@ void main() {
     await tester.enterText(find.byType(TextField), 'tiramisu latte');
     await tester.pumpAndSettle();
     final product = find.byKey(const Key('product-coffee-tiramisu-latte'));
-    await tester.ensureVisible(product);
+    await Scrollable.ensureVisible(tester.element(product), alignment: .5);
+    await tester.pumpAndSettle();
+    expect(product.hitTestable(), findsOneWidget);
     await tester.tap(product);
     await tester.pumpAndSettle();
     expect(find.text('Tiramisu Latte'), findsOneWidget);

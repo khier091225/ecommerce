@@ -31,20 +31,10 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('Category strip and empty search recovery keep the query', (
+  testWidgets('Visible categories and empty search recovery keep the query', (
     tester,
   ) async {
     await openMenu(tester);
-    await tester.drag(
-      find.byKey(const Key('category-scroll')),
-      const Offset(-300, 0),
-    );
-    await tester.pumpAndSettle();
-    await Scrollable.ensureVisible(
-      tester.element(find.byKey(const Key('category-Food'))),
-      alignment: .5,
-    );
-    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('category-Food')));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -78,7 +68,10 @@ void main() {
         find.byKey(const Key('menu-search')).hitTestable(),
         findsOneWidget,
       );
-      expect(find.byTooltip('Next categories').hitTestable(), findsOneWidget);
+      expect(
+        find.byKey(const Key('category-More Drinks')).hitTestable(),
+        findsOneWidget,
+      );
       final scroll = tester
           .widget<CustomScrollView>(find.byType(CustomScrollView))
           .controller!;
@@ -99,47 +92,73 @@ void main() {
     },
   );
 
-  testWidgets(
-    'Category arrows reach later groups and selected chip stays visible',
-    (tester) async {
-      await openMenu(tester);
-      for (var i = 0; i < 5; i++) {
-        final next = tester.widget<IconButton>(
-          find.byKey(const Key('next-categories')),
-        );
-        if (next.onPressed == null) break;
-        await tester.tap(find.byTooltip('Next categories'));
-        await tester.pumpAndSettle();
-      }
-      final last = find.byKey(const Key('category-More Drinks'));
-      expect(last.hitTestable(), findsOneWidget);
-      await tester.tap(last);
-      await tester.pumpAndSettle();
-      expect(shop.category, 'More Drinks');
+  testWidgets('All categories are reachable without navigation buttons', (
+    tester,
+  ) async {
+    await openMenu(tester);
+    expect(find.byTooltip('Previous categories'), findsNothing);
+    expect(find.byTooltip('Next categories'), findsNothing);
+    for (final category in ShopController.categories) {
       expect(
-        shop.filteredProducts.every((p) => p.category == 'More Drinks'),
-        isTrue,
-      );
-      expect(last.hitTestable(), findsOneWidget);
-      await tester.drag(find.byType(CustomScrollView), const Offset(0, -350));
-      await tester.pumpAndSettle();
-      final scroll = tester
-          .widget<CustomScrollView>(find.byType(CustomScrollView))
-          .controller!;
-      final position = scroll.offset;
-      shop.selectCategory('All');
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const Key('category-All')).hitTestable(),
+        find.byKey(Key('category-$category')).hitTestable(),
         findsOneWidget,
       );
-      expect(scroll.offset, closeTo(position, 1));
+    }
+    final last = find.byKey(const Key('category-More Drinks'));
+    await tester.tap(last);
+    await tester.pumpAndSettle();
+    expect(shop.category, 'More Drinks');
+    expect(shop.filteredProducts, hasLength(10));
+    expect(
+      shop.filteredProducts.every((p) => p.category == 'More Drinks'),
+      isTrue,
+    );
+    await tester.tap(last);
+    await tester.pumpAndSettle();
+    expect(shop.category, 'All');
+    expect(shop.filteredProducts, hasLength(92));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'Reset clears search category and sorting while retaining the bag and favorites',
+    (tester) async {
+      shop.selectCategory('Coffee');
+      shop.search('latte');
+      shop.sortBy(MenuSort.priceLow);
+      shop.addToCart(shop.products.first);
+      shop.toggleFavorite(shop.products.first);
+      await openMenu(tester);
+      await tester.tap(find.byKey(const Key('reset-menu-filters')));
+      await tester.pumpAndSettle();
+      expect(shop.hasActiveFilters, isFalse);
+      expect(shop.query, isEmpty);
+      expect(shop.category, 'All');
+      expect(shop.sort, MenuSort.recommended);
+      expect(shop.filteredProducts, hasLength(92));
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('menu-search')))
+            .controller!
+            .text,
+        isEmpty,
+      );
+      expect(
+        tester
+            .widget<ChoiceChip>(find.byKey(const Key('category-All')))
+            .selected,
+        isTrue,
+      );
+      expect(find.byKey(const Key('reset-menu-filters')), findsNothing);
+      expect(shop.cartCount, 1);
+      expect(shop.total, 145);
+      expect(shop.favorites, hasLength(1));
       expect(tester.takeException(), isNull);
     },
   );
 
   testWidgets(
-    'Clear search preserves category and sort; desktop needs no arrows',
+    'Clear search preserves category and sort on desktop',
     (tester) async {
       shop.selectCategory('Coffee');
       shop.sortBy(MenuSort.priceLow);

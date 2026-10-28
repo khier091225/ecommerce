@@ -1184,6 +1184,10 @@ class ShopController extends ChangeNotifier {
   String get query => _query;
   String get category => _category;
   MenuSort get sort => _sort;
+  bool get hasActiveFilters =>
+      _query.trim().isNotEmpty ||
+      _category != 'All' ||
+      _sort != MenuSort.recommended;
   List<Product> get products => repository.products;
   List<Product> get filteredProducts {
     final matches = products.where((product) {
@@ -1233,6 +1237,13 @@ class ShopController extends ChangeNotifier {
 
   void selectCategory(String value) {
     _category = value;
+    notifyListeners();
+  }
+
+  void resetFilters() {
+    _query = '';
+    _category = 'All';
+    _sort = MenuSort.recommended;
     notifyListeners();
   }
 
@@ -1893,6 +1904,13 @@ class _MenuScreenState extends State<MenuScreen> {
     resetPosition();
   }
 
+  void resetFilters() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    search.clear();
+    shop.resetFilters();
+    resetPosition();
+  }
+
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
@@ -1900,7 +1918,6 @@ class _MenuScreenState extends State<MenuScreen> {
       final padding = wide ? 24.0 : 16.0;
       final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
       final searchHeight = math.max(56.0, 14 * scale + 32);
-      final categoryHeight = math.max(48.0, 13 * scale + 30);
       return ListenableBuilder(
         listenable: shop,
         builder: (context, _) {
@@ -2058,10 +2075,9 @@ class _MenuScreenState extends State<MenuScreen> {
                   ),
                 ),
                 if (tab == 0)
-                  SliverPersistentHeader(
-                    pinned: true,
-                    delegate: MenuFilterHeader(
-                      height: searchHeight + categoryHeight + 28,
+                  PinnedHeaderSliver(
+                    child: Material(
+                      color: AppColors.canvas,
                       child: MenuFilters(
                         controller: shop,
                         search: search,
@@ -2069,7 +2085,6 @@ class _MenuScreenState extends State<MenuScreen> {
                         onCategory: selectCategory,
                         horizontalPadding: padding,
                         searchHeight: searchHeight,
-                        categoryHeight: categoryHeight,
                       ),
                     ),
                   ),
@@ -2112,6 +2127,27 @@ class _MenuScreenState extends State<MenuScreen> {
                                 ],
                               ),
                             ),
+                            if (tab == 0 && shop.hasActiveFilters) ...[
+                              Tooltip(
+                                message: 'Reset filters',
+                                child: TextButton(
+                                  key: const Key('reset-menu-filters'),
+                                  onPressed: resetFilters,
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: AppColors.teal,
+                                    minimumSize: const Size(48, 48),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Reset',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                            ],
                             if (tab == 0)
                               PopupMenuButton<MenuSort>(
                                 tooltip: 'Sort menu',
@@ -2350,33 +2386,6 @@ class _BagSummary extends StatelessWidget {
 // ============================================================
 // SEARCH AND CATEGORY FILTER CONTROLS
 // ============================================================
-class MenuFilterHeader extends SliverPersistentHeaderDelegate {
-  MenuFilterHeader({required this.height, required this.child});
-  final double height;
-  final Widget child;
-
-  @override
-  double get minExtent => height;
-  @override
-  double get maxExtent => height;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) => Material(
-    color: AppColors.canvas,
-    elevation: overlapsContent ? 3 : 0,
-    shadowColor: AppColors.dark.withValues(alpha: .12),
-    child: child,
-  );
-
-  @override
-  bool shouldRebuild(MenuFilterHeader oldDelegate) =>
-      height != oldDelegate.height || child != oldDelegate.child;
-}
-
 class MenuFilters extends StatelessWidget {
   const MenuFilters({
     super.key,
@@ -2386,7 +2395,6 @@ class MenuFilters extends StatelessWidget {
     required this.onCategory,
     required this.horizontalPadding,
     required this.searchHeight,
-    required this.categoryHeight,
   });
 
   final ShopController controller;
@@ -2395,7 +2403,6 @@ class MenuFilters extends StatelessWidget {
   final ValueChanged<String> onCategory;
   final double horizontalPadding;
   final double searchHeight;
-  final double categoryHeight;
 
   @override
   Widget build(BuildContext context) => ContentWidth(
@@ -2403,6 +2410,8 @@ class MenuFilters extends StatelessWidget {
     child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             height: searchHeight,
@@ -2434,198 +2443,46 @@ class MenuFilters extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            height: categoryHeight,
-            child: _CategoryStrip(
-              selected: controller.category,
-              onSelected: onCategory,
-            ),
+          Wrap(
+            key: const Key('category-filters'),
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final category in ShopController.categories)
+                ChoiceChip(
+                  key: Key('category-$category'),
+                  label: Text(category),
+                  selected: controller.category == category,
+                  onSelected: (selected) =>
+                      onCategory(selected ? category : 'All'),
+                  showCheckmark: false,
+                  selectedColor: AppColors.dark,
+                  backgroundColor: AppColors.surface,
+                  side: BorderSide(
+                    color: controller.category == category
+                        ? AppColors.dark
+                        : AppColors.border,
+                  ),
+                  labelStyle: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: controller.category == category
+                        ? AppColors.white
+                        : AppColors.ink,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+            ],
           ),
         ],
       ),
     ),
-  );
-}
-
-class _CategoryStrip extends StatefulWidget {
-  const _CategoryStrip({required this.selected, required this.onSelected});
-  final String selected;
-  final ValueChanged<String> onSelected;
-
-  @override
-  State<_CategoryStrip> createState() => _CategoryStripState();
-}
-
-class _CategoryStripState extends State<_CategoryStrip> {
-  final scroll = ScrollController();
-  final rowKey = GlobalKey();
-  final categoryKeys = {
-    for (final category in ShopController.categories) category: GlobalKey(),
-  };
-  double availableWidth = 0;
-  bool overflowing = false;
-  bool canGoBack = false;
-  bool canGoForward = false;
-  bool layoutCheckScheduled = false;
-  bool revealSelected = true;
-
-  @override
-  void initState() {
-    super.initState();
-    scroll.addListener(updateArrows);
-  }
-
-  @override
-  void didUpdateWidget(_CategoryStrip oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.selected != oldWidget.selected) revealSelected = true;
-  }
-
-  @override
-  void dispose() {
-    scroll.dispose();
-    super.dispose();
-  }
-
-  void updateArrows() {
-    if (!mounted || !scroll.hasClients) return;
-    final back = scroll.position.extentBefore > 1;
-    final forward = scroll.position.extentAfter > 1;
-    if (back != canGoBack || forward != canGoForward) {
-      setState(() {
-        canGoBack = back;
-        canGoForward = forward;
-      });
-    }
-  }
-
-  Duration get motionDuration => MediaQuery.disableAnimationsOf(context)
-      ? Duration.zero
-      : const Duration(milliseconds: 220);
-
-  void checkLayoutAfterFrame() {
-    if (layoutCheckScheduled) return;
-    layoutCheckScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      layoutCheckScheduled = false;
-      if (!mounted || !scroll.hasClients) return;
-      final row = rowKey.currentContext?.findRenderObject() as RenderBox?;
-      final needsArrows = row != null && row.size.width > availableWidth + 1;
-      if (needsArrows != overflowing) {
-        setState(() => overflowing = needsArrows);
-        // Recheck after arrow buttons change the scroll viewport width.
-        return;
-      }
-      if (revealSelected) {
-        revealSelected = false;
-        final selected = categoryKeys[widget.selected]?.currentContext
-            ?.findRenderObject();
-        if (selected != null) {
-          // Only scroll this strip, preserving the menu's vertical position.
-          scroll.position.ensureVisible(
-            selected,
-            alignment: .5,
-            duration: motionDuration,
-            curve: Curves.easeOutCubic,
-          );
-        }
-      }
-      updateArrows();
-    });
-  }
-
-  void move(double direction) {
-    final position = scroll.position;
-    final target = (scroll.offset + direction * position.viewportDimension * .8)
-        .clamp(position.minScrollExtent, position.maxScrollExtent);
-    if (motionDuration == Duration.zero) {
-      scroll.jumpTo(target);
-    } else {
-      scroll.animateTo(
-        target,
-        duration: motionDuration,
-        curve: Curves.easeOutCubic,
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      if (availableWidth != constraints.maxWidth) revealSelected = true;
-      availableWidth = constraints.maxWidth;
-      checkLayoutAfterFrame();
-      return Row(
-        children: [
-          if (overflowing)
-            IconButton(
-              key: const Key('previous-categories'),
-              tooltip: 'Previous categories',
-              onPressed: canGoBack ? () => move(-1) : null,
-              style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
-              icon: const Icon(Icons.chevron_left),
-            ),
-          Expanded(
-            child: SingleChildScrollView(
-              key: const Key('category-scroll'),
-              controller: scroll,
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                key: rowKey,
-                children: [
-                  for (final category in ShopController.categories)
-                    Padding(
-                      key: categoryKeys[category],
-                      padding: EdgeInsets.only(
-                        right: category == ShopController.categories.last
-                            ? 0
-                            : 8,
-                      ),
-                      child: ChoiceChip(
-                        key: Key('category-$category'),
-                        label: Text(category == 'All' ? 'All items' : category),
-                        selected: widget.selected == category,
-                        onSelected: (_) => widget.onSelected(category),
-                        showCheckmark: true,
-                        checkmarkColor: AppColors.white,
-                        selectedColor: AppColors.dark,
-                        backgroundColor: AppColors.surface,
-                        side: BorderSide(
-                          color: widget.selected == category
-                              ? AppColors.dark
-                              : AppColors.border,
-                        ),
-                        labelStyle: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: widget.selected == category
-                              ? AppColors.white
-                              : AppColors.ink,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 10,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          if (overflowing)
-            IconButton(
-              key: const Key('next-categories'),
-              tooltip: 'Next categories',
-              onPressed: canGoForward ? () => move(1) : null,
-              style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
-              icon: const Icon(Icons.chevron_right),
-            ),
-        ],
-      );
-    },
   );
 }
 

@@ -21,7 +21,7 @@ An installable debug APK is available after `flutter build apk --debug` at `buil
 - SHOP NOW opens the menu using `Navigator.push()` and `MaterialPageRoute`. Back returns to the Start Screen; cart and favorites remain available when entering again. Rapid taps open one menu. Reduced-motion settings show a still composition.
 - A coordinated 600 ms transition fades through teal before gently revealing the menu, configured through the Material page transition theme. Initial menu images are preloaded during the intro, and menu controls become active when the transition finishes.
 - All 92 products from `SmoochCafe/pages/products.html`, using its names, prices, categories, and local product images.
-- Pinned search, one category strip with scroll arrows when needed, and price/name sorting.
+- Pinned search and wrapping category chips keep every choice visible without category navigation arrows. Tap a selected category to return to All, or use Reset to clear search, category, and sorting together.
 - Search matches words in any order and ignores extra whitespace. Clearing search preserves the chosen category and sort order.
 - Every `Product.category` matches a filter choice. Descriptive product labels, such as Quarter Pounder or Brownies, are kept in `Product.subcategory` and remain searchable.
 - Product details, a favorites list, and browsing positions retained when switching tabs.
