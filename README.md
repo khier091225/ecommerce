@@ -17,15 +17,15 @@ An installable debug APK is available after `flutter build apk --debug` at `buil
 
 ## Included
 
-- A 3D Start Screen with a shaded coffee cup, orbiting beans, steam, the Smooch logo, and a primary SHOP NOW button. After the 4.6-second intro, gentle cup motion, beans, and steam loop while waiting for the user to enter. Motion pauses in the menu or background and resumes on return; reduced-motion settings keep the scene still.
-- SHOP NOW opens the menu using `Navigator.push()` and `MaterialPageRoute`. Back returns to the Start Screen; cart and favorites remain available when entering again. Rapid taps open one menu. Reduced-motion settings show a still composition.
+- A 3D Start Screen with a shaded coffee cup, orbiting beans, steam, the Smooch logo, and a primary ORDER NOW button. After the 4.6-second intro, gentle cup motion, beans, and steam loop while waiting for the user to enter. Motion pauses in the menu or background and resumes on return; reduced-motion settings keep the scene still.
+- ORDER NOW opens the menu using `Navigator.push()` and `MaterialPageRoute`. Back returns to the Start Screen; the bag remains available when entering again. Rapid taps open one menu. Reduced-motion settings show a still composition.
 - A coordinated 600 ms transition fades through teal before gently revealing the menu, configured through the Material page transition theme. Initial menu images are preloaded during the intro, and menu controls become active when the transition finishes.
 - All 92 products from `SmoochCafe/pages/products.html`, using its names, prices, categories, and local product images.
 - Search and a horizontally scrollable category tab rail stay visible above the menu. The selected category scrolls into view and has a moving teal underline; there are no category arrows. Tap a selected category to return to All, or use Reset to clear search, category, and sorting together.
 - Product grids follow horizontal swipes using `TabBarView`, keeping the active tab and displayed products in sync. The existing featured-product carousel remains on All. Reduced-motion settings make category taps jump directly to the selected page.
 - Search matches words in any order and ignores extra whitespace. Clearing search preserves the chosen category and sort order.
 - Every `Product.category` matches a filter choice. Descriptive product labels, such as Quarter Pounder or Brownies, are kept in `Product.subcategory` and remain searchable.
-- Product details, a favorites list, and browsing positions retained when switching tabs.
+- Product details, an Order History tab with saved receipts, and browsing positions retained when switching tabs.
 - Compact product cards with shorter photos, price/Add controls side by side, and up to five columns on wide screens. Cards adapt for larger text and retain in-bag quantities and a persistent bag summary with Philippine peso totals.
 - Shared cart with quantities, item removal, and a live badge.
 - The bag leads to checkout with required name and Philippine mobile number, optional pickup notes, and a choice of cash at pickup or a GCash-style payment preview. The wallet screen shows the checkout amount and masked mobile, then previews processing, success, failure, or cancellation. It never asks for a PIN or OTP, is not connected to GCash, and takes no money. The bag stays intact until an order is saved successfully.
@@ -33,7 +33,7 @@ An installable debug APK is available after `flutter build apk --debug` at `buil
 - Cafe location, hours, phone number, and email copied from the supplied website.
 - Responsive phone, tablet, and desktop layouts, plus widget previews at the end of `lib/main.dart`.
 
-Cart and favorites are kept in memory during the app session. Completed demo receipts and the next reference number are stored locally on the device with `shared_preferences`. The app has no backend or account system, so history does not sync across devices.
+The bag is kept in memory during the app session. Completed receipts and the next reference number are stored locally on the device with `shared_preferences`. The app has no backend or account system, so history does not sync across devices.
 
 ## Design
 
@@ -48,7 +48,7 @@ lib/
   main.dart                  Complete application, following the starter layout
 ```
 
-All application Dart code is in `lib/main.dart`, just like the supplied base code. `main()` runs `MiniShopApp`. Section comments separate colors/theme, product models and data, shopping state, the main application, shared widgets, Start Screen/transition, menu/filter controls, product cards, product details, cart, checkout, demo payment, order history/confirmation, cafe information, the 3D painter, and widget previews. There are no local Dart imports or `part` files.
+All application Dart code is in `lib/main.dart`, just like the supplied base code. `main()` runs `MiniShopApp`. Section comments separate colors/theme, product models and data, shopping state, the main application, shared widgets, Start Screen/transition, menu/filter controls, product cards, product details, cart, checkout, payment preview, order history/confirmation, cafe information, the 3D painter, and widget previews. There are no local Dart imports or `part` files.
 
 Product photos, the logo, and cafe images are in `assets/images/`; fonts are in `assets/fonts/`. Both are declared in `pubspec.yaml`. Tests live under `test/` and import `main.dart`.
 
@@ -71,4 +71,4 @@ flutter test
 flutter build web
 ```
 
-The tests cover catalog assets and IDs, filtering, sorting, featured and category swipes, active tab synchronization, automatic category visibility, cart/favorites, checkout validation, demo payment outcomes, failed storage safety, receipt restoration and references after restart, confirmation/history navigation, reduced motion, and narrow-screen layouts with the bundled fonts.
+The tests cover catalog assets and IDs, filtering, sorting, featured and category swipes, active tab synchronization, automatic category visibility, the bag, checkout validation, payment outcomes, failed storage safety, receipt restoration and references after restart, Order History tab navigation, reduced motion, and narrow-screen layouts with the bundled fonts.

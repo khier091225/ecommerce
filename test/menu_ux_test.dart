@@ -84,7 +84,7 @@ void main() {
           .controller!;
       final position = scroll.offset;
       expect(position, greaterThan(200));
-      await tester.tap(find.text('Favorites'));
+      await tester.tap(find.text('Order history'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Our menu'));
       await tester.pumpAndSettle();
@@ -125,13 +125,19 @@ void main() {
   );
 
   testWidgets(
-    'Reset clears search category and sorting while retaining the bag and favorites',
+    'Reset clears search category and sorting while retaining bag and orders',
     (tester) async {
       shop.selectCategory('Coffee');
       shop.search('latte');
       shop.sortBy(MenuSort.priceLow);
       shop.addToCart(shop.products.first);
-      shop.toggleFavorite(shop.products.first);
+      await shop.submitOrder(
+        customerName: 'Guest',
+        mobileNumber: '09171234567',
+        notes: '',
+        paymentMethod: PaymentMethod.cash,
+      );
+      shop.addToCart(shop.products.first);
       await openMenu(tester);
       await tester.tap(find.byKey(const Key('reset-menu-filters')));
       await tester.pumpAndSettle();
@@ -157,7 +163,7 @@ void main() {
       expect(find.byKey(const Key('reset-menu-filters')), findsNothing);
       expect(shop.cartCount, 1);
       expect(shop.total, 145);
-      expect(shop.favorites, hasLength(1));
+      expect(shop.orders, hasLength(1));
       expect(tester.takeException(), isNull);
     },
   );
@@ -178,6 +184,29 @@ void main() {
     expect(shop.category, 'Coffee');
     expect(shop.sort, MenuSort.priceLow);
     expect(shop.filteredProducts, hasLength(13));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Order history replaces Favorites on desktop', (tester) async {
+    shop.addToCart(shop.products.first);
+    await shop.submitOrder(
+      customerName: 'Juan Dela Cruz',
+      mobileNumber: '09171234567',
+      notes: '',
+      paymentMethod: PaymentMethod.cash,
+    );
+    await openMenu(tester, size: const Size(1024, 768));
+    expect(find.text('Favorites'), findsNothing);
+    expect(find.byTooltip('Order history'), findsNothing);
+    await tester.tap(find.text('Order history'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('history-SMC-0001')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('history-SMC-0001')));
+    await tester.pumpAndSettle();
+    expect(find.text('Pickup for Juan Dela Cruz'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('continue-shopping')));
+    await tester.pumpAndSettle();
+    expect(find.text('Your orders'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

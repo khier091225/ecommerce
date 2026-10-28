@@ -15,7 +15,7 @@ void main() {
 // FINAL PROJECT STARTER CODE
 // Customize this application based on your chosen e-commerce.
 //
-// The required StartScreen is implemented below. Its SHOP NOW
+// The required StartScreen is implemented below. Its ORDER NOW
 // button opens MenuScreen using Navigator.push() and
 // MaterialPageRoute. All application code remains in this file.
 // ============================================================
@@ -1266,7 +1266,7 @@ class MenuRepository {
 }
 
 // ============================================================
-// SEARCH, CATEGORY FILTERS, FAVORITES, AND CART STATE
+// SEARCH, CATEGORY FILTERS, AND CART STATE
 // ============================================================
 enum MenuSort {
   recommended('Cafe picks'),
@@ -1285,7 +1285,6 @@ class ShopController extends ChangeNotifier {
   final MenuRepository repository;
   final OrderStore orderStore;
   final Map<String, CartItem> _cart = {};
-  final Set<String> _favorites = {};
   final List<OrderReceipt> _orders = [];
   bool _placingOrder = false;
   Future<void>? _restoreTask;
@@ -1351,8 +1350,6 @@ class ShopController extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<Product> get favorites =>
-      products.where(isFavorite).toList(growable: false);
   List<CartItem> get cartItems => List.unmodifiable(_cart.values);
   int get cartCount => _cart.values.fold(0, (sum, item) => sum + item.quantity);
   int get total => _cart.values.fold(0, (sum, item) => sum + item.total);
@@ -1371,13 +1368,6 @@ class ShopController extends ChangeNotifier {
     _query = '';
     _category = 'All';
     _sort = MenuSort.recommended;
-    notifyListeners();
-  }
-
-  bool isFavorite(Product product) => _favorites.contains(product.id);
-
-  void toggleFavorite(Product product) {
-    if (!_favorites.remove(product.id)) _favorites.add(product.id);
     notifyListeners();
   }
 
@@ -2060,7 +2050,8 @@ class MenuScreen extends StatefulWidget {
 class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
   int tab = 0;
   final search = TextEditingController();
-  final scrolls = List.generate(3, (_) => ScrollController());
+  final orderScroll = ScrollController();
+  final cafeScroll = ScrollController();
   final categoryScrolls = List.generate(
     ShopController.categories.length,
     (_) => ScrollController(),
@@ -2111,9 +2102,8 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
       categoryTabs.dispose();
     }
     featuredPages.dispose();
-    for (final scroll in scrolls) {
-      scroll.dispose();
-    }
+    orderScroll.dispose();
+    cafeScroll.dispose();
     for (final scroll in categoryScrolls) {
       scroll.dispose();
     }
@@ -2125,15 +2115,6 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => CartScreen(controller: shop)),
-    );
-  }
-
-  void openOrderHistory() {
-    FocusManager.instance.primaryFocus?.unfocus();
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => OrderHistoryScreen(controller: shop),
-      ),
     );
   }
 
@@ -2207,14 +2188,13 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final wide = constraints.maxWidth >= 800;
+      final wide = constraints.maxWidth >= 900;
       final padding = wide ? 24.0 : 16.0;
       final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
       final searchHeight = math.max(56.0, 14 * scale + 32);
       return ListenableBuilder(
         listenable: shop,
         builder: (context, _) {
-          final items = tab == 1 ? shop.favorites : shop.filteredProducts;
           return Scaffold(
             appBar: AppBar(
               automaticallyImplyLeading: false,
@@ -2240,7 +2220,7 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
                     if (wide) ...[
                       for (final entry in [
                         'Our menu',
-                        'Favorites',
+                        'Order history',
                         'Our cafe',
                       ].asMap().entries)
                         Padding(
@@ -2265,14 +2245,6 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
                         ),
                       const SizedBox(width: 20),
                     ],
-                    IconButton(
-                      tooltip: 'Order history',
-                      onPressed: openOrderHistory,
-                      icon: const Icon(
-                        Icons.receipt_long_outlined,
-                        color: AppColors.white,
-                      ),
-                    ),
                     CartButton(controller: shop, onPressed: openCart),
                   ],
                 ),
@@ -2304,12 +2276,12 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
                               label: 'Our menu',
                             ),
                             NavigationDestination(
-                              icon: Icon(Icons.favorite_border),
+                              icon: Icon(Icons.receipt_long_outlined),
                               selectedIcon: Icon(
-                                Icons.favorite,
+                                Icons.receipt_long,
                                 color: AppColors.dark,
                               ),
-                              label: 'Favorites',
+                              label: 'Order history',
                             ),
                             NavigationDestination(
                               icon: Icon(Icons.storefront_outlined),
@@ -2392,9 +2364,51 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
                       ),
                     ],
                   )
+                : tab == 1
+                ? Column(
+                    children: [
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 680),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                24,
+                                24,
+                                24,
+                                16,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Your orders', style: displayStyle(32)),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Find past orders and view the details.',
+                                    style: TextStyle(
+                                      color: AppColors.secondaryText,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: _OrderHistoryContent(
+                          controller: shop,
+                          onBrowseMenu: () => selectTab(0),
+                          scroll: orderScroll,
+                        ),
+                      ),
+                    ],
+                  )
                 : CustomScrollView(
-                    key: PageStorageKey('menu-tab-$tab'),
-                    controller: scrolls[tab],
+                    key: const PageStorageKey('menu-tab-cafe'),
+                    controller: cafeScroll,
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
                     slivers: [
@@ -2403,94 +2417,10 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
                           padding: EdgeInsets.symmetric(horizontal: padding),
                           child: Padding(
                             padding: const EdgeInsets.only(top: 24, bottom: 14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (tab == 1) ...[
-                                  const Eyebrow('Saved with love'),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    'Your happy little list.',
-                                    style: displayStyle(32),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  const Text(
-                                    'All the things you’ll want to come back for.',
-                                    style: TextStyle(
-                                      color: AppColors.secondaryText,
-                                      fontSize: 14,
-                                      height: 1.6,
-                                    ),
-                                  ),
-                                ] else
-                                  CafeSection(onBrowse: () => selectTab(0)),
-                              ],
-                            ),
+                            child: CafeSection(onBrowse: () => selectTab(0)),
                           ),
                         ),
                       ),
-                      if (tab != 2) ...[
-                        SliverToBoxAdapter(
-                          child: ContentWidth(
-                            padding: EdgeInsets.symmetric(horizontal: padding),
-                            child: Padding(
-                              padding: const EdgeInsets.only(
-                                top: 14,
-                                bottom: 16,
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Text(
-                                          'Your favorites',
-                                          style: TextStyle(
-                                            fontSize: 17,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '${items.length} ${items.length == 1 ? 'item' : 'items'}',
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: AppColors.secondaryText,
-                                            fontSize: 12,
-                                            height: 1.5,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (items.isEmpty)
-                          SliverToBoxAdapter(
-                            child: EmptyState(
-                              icon: Icons.favorite_border,
-                              title: 'Make room for favorites.',
-                              message: 'Tap the heart on a menu item to save it here.',
-                              action: OutlinedButton(
-                                onPressed: () => selectTab(0),
-                                child: const Text('Browse the menu'),
-                              ),
-                            ),
-                          )
-                        else
-                          _ProductGridSliver(
-                            products: items,
-                            controller: shop,
-                            width: constraints.maxWidth,
-                            horizontalPadding: padding,
-                          ),
-                      ],
                       const SliverToBoxAdapter(
                         child: Padding(
                           padding: EdgeInsets.symmetric(
@@ -2819,7 +2749,7 @@ class _FeaturedCarousel extends StatelessWidget {
             children: [
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 14),
-                child: Eyebrow('Smooch favorites · Swipe to explore'),
+                child: Eyebrow('Smooch picks · Swipe to explore'),
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -3205,30 +3135,6 @@ class ProductCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                  Positioned(
-                    right: 4,
-                    top: 4,
-                    child: IconButton.filled(
-                      tooltip: controller.isFavorite(product)
-                          ? 'Unsave ${product.name}'
-                          : 'Save ${product.name}',
-                      onPressed: () => controller.toggleFavorite(product),
-                      style: IconButton.styleFrom(
-                        backgroundColor: AppColors.surface,
-                        foregroundColor: AppColors.dark,
-                        minimumSize: const Size(48, 48),
-                      ),
-                      icon: Icon(
-                        controller.isFavorite(product)
-                            ? Icons.favorite
-                            : Icons.favorite_border,
-                        size: 21,
-                        color: controller.isFavorite(product)
-                            ? AppColors.action
-                            : AppColors.dark,
-                      ),
-                    ),
-                  ),
                   if (quantity > 0)
                     Positioned(
                       left: 10,
@@ -3411,30 +3317,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Eyebrow(widget.product.subcategory),
-                            ),
-                            ListenableBuilder(
-                              listenable: widget.controller,
-                              builder: (context, _) => IconButton(
-                                tooltip:
-                                    widget.controller.isFavorite(widget.product)
-                                    ? 'Remove from favorites'
-                                    : 'Save to favorites',
-                                onPressed: () => widget.controller
-                                    .toggleFavorite(widget.product),
-                                icon: Icon(
-                                  widget.controller.isFavorite(widget.product)
-                                      ? Icons.favorite
-                                      : Icons.favorite_border,
-                                  color: AppColors.action,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                        Eyebrow(widget.product.subcategory),
                         const SizedBox(height: 12),
                         Text(widget.product.name, style: displayStyle(38)),
                         const SizedBox(height: 18),
@@ -3514,7 +3397,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         const Row(
                           children: [
                             Icon(
-                              Icons.favorite_border,
+                              Icons.local_cafe_outlined,
                               color: AppColors.action,
                               size: 15,
                             ),
@@ -3805,114 +3688,134 @@ class OrderHistoryScreen extends StatelessWidget {
   final ShopController controller;
 
   @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('Your orders', style: TextStyle(fontSize: 16)),
+    ),
+    body: _OrderHistoryContent(
+      controller: controller,
+      onBrowseMenu: () => Navigator.pop(context),
+    ),
+  );
+}
+
+class _OrderHistoryContent extends StatelessWidget {
+  const _OrderHistoryContent({
+    required this.controller,
+    required this.onBrowseMenu,
+    this.scroll,
+  });
+
+  final ShopController controller;
+  final VoidCallback onBrowseMenu;
+  final ScrollController? scroll;
+
+  @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: controller,
-    builder: (context, _) => Scaffold(
-      appBar: AppBar(
-        title: const Text('Your orders', style: TextStyle(fontSize: 16)),
-      ),
-      body: controller.orders.isEmpty
-          ? Center(
-              child: SingleChildScrollView(
-                child: EmptyState(
-                  icon: Icons.receipt_long_outlined,
-                  title: 'No orders yet.',
-                  message: 'Your saved orders will appear here.',
-                  action: FilledButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Browse the menu'),
-                  ),
+    builder: (context, _) => controller.orders.isEmpty
+        ? Center(
+            child: SingleChildScrollView(
+              child: EmptyState(
+                icon: Icons.receipt_long_outlined,
+                title: 'No orders yet.',
+                message: 'Your saved orders will appear here.',
+                action: FilledButton(
+                  onPressed: onBrowseMenu,
+                  child: const Text('Browse the menu'),
                 ),
               ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              itemCount: controller.orders.length,
-              itemBuilder: (context, index) {
-                final order = controller.orders[index];
-                return Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 680),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-                      child: Material(
-                        color: AppColors.surface,
+            ),
+          )
+        : ListView.builder(
+            key: const PageStorageKey('order-history-list'),
+            controller: scroll,
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            itemCount: controller.orders.length,
+            itemBuilder: (context, index) {
+              final order = controller.orders[index];
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                    child: Material(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      child: InkWell(
+                        key: Key('history-${order.reference}'),
                         borderRadius: BorderRadius.circular(18),
-                        child: InkWell(
-                          key: Key('history-${order.reference}'),
-                          borderRadius: BorderRadius.circular(18),
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute<void>(
-                              builder: (_) => OrderConfirmationScreen(
-                                order: order,
-                                fromHistory: true,
-                              ),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => OrderConfirmationScreen(
+                              order: order,
+                              fromHistory: true,
                             ),
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(18),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.receipt_long,
-                                      color: AppColors.teal,
-                                      size: 26,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        order.reference,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.dark,
-                                        ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(18),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.receipt_long,
+                                    color: AppColors.teal,
+                                    size: 26,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      order.reference,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.dark,
                                       ),
                                     ),
-                                    const Icon(
-                                      Icons.chevron_right,
-                                      color: AppColors.secondaryText,
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  orderDate(order.createdAt),
-                                  style: const TextStyle(
-                                    fontSize: 12,
+                                  ),
+                                  const Icon(
+                                    Icons.chevron_right,
                                     color: AppColors.secondaryText,
                                   ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                orderDate(order.createdAt),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.secondaryText,
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'} · ${order.paymentStatus}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.secondaryText,
-                                  ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'} · ${order.paymentStatus}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.secondaryText,
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  pesos(order.total),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 16,
-                                  ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                pesos(order.total),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ),
                   ),
-                );
-              },
-            ),
-    ),
+                ),
+              );
+            },
+          ),
   );
 }
 

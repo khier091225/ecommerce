@@ -29,7 +29,7 @@ Use deeper coral for primary shopping actions. The original coral remains approp
 | Medium | The filter-icon sheet repeated the same seven choices as the category strip. | Removed the duplicate sheet and retained one category control. |
 | Medium | Customers could not order results by price or name. | Added ascending/descending price and alphabetical sorting, with a visible current-sort label. |
 | Medium | A cart badge provided limited feedback after adding products. | Persistent bag summary shows quantity and total; each selected product also displays its in-bag quantity. |
-| Medium | Switching tabs interrupted browsing position. | Menu, favorites, and cafe tabs retain separate scroll positions. |
+| Medium | Switching tabs interrupted browsing position. | Menu, Order History, and cafe tabs retain separate scroll positions. |
 | Medium | A category-specific search with no results offered weak recovery. | “Search all categories” retains the entered query; “Clear search” is available when searching the full menu. |
 | Medium | Search required the exact word order and spacing. | Matching accepts words in any order and extra whitespace, while retaining the category constraint. Clearing search preserves category and sorting. |
 | Medium | Larger text could crowd the catalog. | The grid reduces its column count and filter/card sizing responds to text scale. |

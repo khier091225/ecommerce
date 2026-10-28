@@ -44,7 +44,6 @@ void main() {
   testWidgets(
     'Place Order opens one confirmation, clears the bag and returns to menu',
     (tester) async {
-      shop.toggleFavorite(shop.products.first);
       await openBag(tester);
       expect(find.text('Review order'), findsNothing);
       await tester.tap(find.byKey(const Key('open-checkout')));
@@ -97,7 +96,6 @@ void main() {
       );
       expect(shop.cartItems, isEmpty);
       expect(shop.total, 0);
-      expect(shop.favorites, hasLength(1));
       await tester.tap(find.byKey(const Key('continue-shopping')));
       await tester.pumpAndSettle();
       expect(find.byType(MenuScreen), findsOneWidget);

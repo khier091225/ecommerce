@@ -130,7 +130,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Favorites and cafe tabs work on a phone', (tester) async {
+  testWidgets('Order history and cafe tabs work on a phone', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -144,26 +144,28 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byTooltip('Save Tiramisu Latte'),
-      200,
-      scrollable: find
-          .descendant(
-            of: find.byType(CustomScrollView).first,
-            matching: find.byType(Scrollable),
-          )
-          .first,
+    await tester.tap(find.text('Order history'));
+    await tester.pumpAndSettle();
+    expect(find.text('No orders yet.'), findsOneWidget);
+    await tester.tap(find.text('Browse the menu'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('menu-category-pages')), findsOneWidget);
+    controller.addToCart(controller.products.first);
+    await controller.submitOrder(
+      customerName: 'Juan Dela Cruz',
+      mobileNumber: '09171234567',
+      notes: '',
+      paymentMethod: PaymentMethod.cash,
     );
-    await tester.ensureVisible(find.byTooltip('Save Tiramisu Latte'));
+    await tester.tap(find.text('Order history'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Save Tiramisu Latte'));
-    await tester.pump();
-    await tester.tap(find.text('Favorites'));
+    expect(find.byKey(const Key('history-SMC-0001')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('history-SMC-0001')));
     await tester.pumpAndSettle();
-    expect(find.text('Tiramisu Latte'), findsOneWidget);
-    await tester.tap(find.byTooltip('Unsave Tiramisu Latte'));
+    expect(find.text('Pickup for Juan Dela Cruz'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('continue-shopping')));
     await tester.pumpAndSettle();
-    expect(find.text('Make room for favorites.'), findsOneWidget);
+    expect(find.text('Your orders'), findsOneWidget);
     await tester.tap(find.text('Our cafe'));
     await tester.pumpAndSettle();
     expect(
@@ -176,6 +178,7 @@ void main() {
   for (final size in [
     const Size(320, 700),
     const Size(768, 1024),
+    const Size(900, 900),
     const Size(1440, 900),
   ]) {
     testWidgets('3D start screen and menu fit ${size.width.toInt()}px', (
@@ -230,7 +233,7 @@ void main() {
   );
 
   testWidgets(
-    'Repeated Shop Now taps open one menu and Back preserves shopping state',
+    'Repeated Shop Now taps open one menu and Back preserves the bag',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
@@ -260,15 +263,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(add);
       await tester.pumpAndSettle();
-      await Scrollable.ensureVisible(
-        tester.element(find.byTooltip('Save Tiramisu Latte')),
-        alignment: .5,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Save Tiramisu Latte'));
-      await tester.pumpAndSettle();
       expect(shop.total, 145);
-      expect(shop.favorites, hasLength(1));
       await tester.tap(find.byTooltip('Back to start'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 700));
@@ -284,7 +279,6 @@ void main() {
       );
       expect(shop.cartCount, 1);
       expect(shop.total, 145);
-      expect(shop.favorites, hasLength(1));
       expect(find.byKey(const Key('view-bag-summary')), findsOneWidget);
       expect(tester.takeException(), isNull);
     },

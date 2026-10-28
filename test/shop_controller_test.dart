@@ -63,15 +63,6 @@ void main() {
     },
   );
 
-  test('Favorites toggle without adding items to the cart', () {
-    final product = shop.products.first;
-    shop.toggleFavorite(product);
-    expect(shop.favorites, [product]);
-    expect(shop.cartCount, 0);
-    shop.toggleFavorite(product);
-    expect(shop.favorites, isEmpty);
-  });
-
   test(
     'Placing demo orders snapshots items and totals with sequential references',
     () async {
@@ -86,14 +77,12 @@ void main() {
       final second = shop.products[1];
       shop.addToCart(first, quantity: 2);
       shop.addToCart(second);
-      shop.toggleFavorite(first);
       final order = (await place())!;
       expect(order.reference, 'SMC-0001');
       expect(order.itemCount, 3);
       expect(order.total, first.price * 2 + second.price);
       expect(shop.cartCount, 0);
       expect(shop.total, 0);
-      expect(shop.favorites, [first]);
       expect(await place(), isNull);
       shop.addToCart(first, quantity: 4);
       expect(order.items.first.quantity, 2);

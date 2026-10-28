@@ -85,7 +85,7 @@ void main() {
       expect(shop.orders, hasLength(1));
       await tester.tap(find.byKey(const Key('continue-shopping')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Order history'));
+      await tester.tap(find.text('Order history'));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('history-SMC-0001')), findsOneWidget);
       await tester.tap(find.byKey(const Key('history-SMC-0001')));
@@ -93,7 +93,7 @@ void main() {
       expect(find.text('Pickup for Juan Dela Cruz'), findsOneWidget);
       await tester.tap(find.byKey(const Key('continue-shopping')));
       await tester.pumpAndSettle();
-      expect(find.byType(OrderHistoryScreen), findsOneWidget);
+      expect(find.text('Your orders'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
