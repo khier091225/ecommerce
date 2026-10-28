@@ -71,6 +71,7 @@ void main() {
         mobileNumber: '09171234567',
         notes: '',
         paymentMethod: PaymentMethod.cash,
+        deliveryAddress: '12 Rizal Street, Carmona, Cavite',
       );
       expect(await place(), isNull);
       final first = shop.products.first;
@@ -152,6 +153,7 @@ void main() {
         mobileNumber: '09171234567',
         notes: 'Less ice',
         paymentMethod: PaymentMethod.cash,
+        deliveryAddress: '12 Rizal Street, Carmona, Cavite',
       );
       expect(receipt?.reference, 'SMC-0001');
       expect(first.cartCount, 0);
@@ -174,6 +176,7 @@ void main() {
         mobileNumber: '09180000000',
         notes: '',
         paymentMethod: PaymentMethod.digital,
+        deliveryAddress: '14 Rizal Street, Carmona, Cavite',
       );
       expect(next?.reference, 'SMC-0002');
       expect(next?.paymentStatus, 'Payment step complete');
@@ -199,6 +202,7 @@ void main() {
           mobileNumber: '09180000000',
           notes: '',
           paymentMethod: PaymentMethod.cash,
+          deliveryAddress: '12 Rizal Street, Carmona, Cavite',
         ),
         throwsStateError,
       );

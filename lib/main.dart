@@ -3,9 +3,22 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' show PointerDeviceKind;
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
+import 'package:flutter_map/flutter_map.dart'
+    show
+        FlutterMap,
+        MapController,
+        MapOptions,
+        Marker,
+        MarkerLayer,
+        TileLayer;
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(MiniShopApp(orderStore: PreferencesOrderStore()));
@@ -297,6 +310,8 @@ class OrderReceipt {
     required this.createdAt,
     this.fulfillment = FulfillmentMethod.pickup,
     this.deliveryAddress = '',
+    this.deliveryLatitude,
+    this.deliveryLongitude,
   }) : items = List.unmodifiable(items);
 
   final String reference;
@@ -308,6 +323,12 @@ class OrderReceipt {
   final DateTime createdAt;
   final FulfillmentMethod fulfillment;
   final String deliveryAddress;
+  final double? deliveryLatitude;
+  final double? deliveryLongitude;
+  LatLng? get deliveryPoint =>
+      deliveryLatitude != null && deliveryLongitude != null
+      ? LatLng(deliveryLatitude!, deliveryLongitude!)
+      : null;
   List<OrderStage> get stages => fulfillment == FulfillmentMethod.delivery
       ? const [
           OrderStage.confirmed,
@@ -346,6 +367,8 @@ class OrderReceipt {
     'createdAt': createdAt.toIso8601String(),
     'fulfillment': fulfillment.name,
     'deliveryAddress': deliveryAddress,
+    'deliveryLatitude': deliveryLatitude,
+    'deliveryLongitude': deliveryLongitude,
   };
 
   factory OrderReceipt.fromJson(Map<String, dynamic> json) => OrderReceipt(
@@ -364,6 +387,8 @@ class OrderReceipt {
       json['fulfillment'] as String? ?? 'pickup',
     ),
     deliveryAddress: json['deliveryAddress'] as String? ?? '',
+    deliveryLatitude: (json['deliveryLatitude'] as num?)?.toDouble(),
+    deliveryLongitude: (json['deliveryLongitude'] as num?)?.toDouble(),
   );
 }
 
@@ -1503,13 +1528,14 @@ class ShopController extends ChangeNotifier {
     required String mobileNumber,
     required String notes,
     required PaymentMethod paymentMethod,
-    FulfillmentMethod fulfillment = FulfillmentMethod.pickup,
-    String deliveryAddress = '',
+    required String deliveryAddress,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
   }) async {
     if (_cart.isEmpty ||
         _placingOrder ||
-        (fulfillment == FulfillmentMethod.delivery &&
-            deliveryAddress.trim().length < 8)) {
+        deliveryAddress.trim().length < 8 ||
+        (deliveryLatitude == null) != (deliveryLongitude == null)) {
       return null;
     }
     _placingOrder = true;
@@ -1524,10 +1550,10 @@ class ShopController extends ChangeNotifier {
         notes: notes.trim(),
         paymentMethod: paymentMethod,
         createdAt: DateTime.now(),
-        fulfillment: fulfillment,
-        deliveryAddress: fulfillment == FulfillmentMethod.delivery
-            ? deliveryAddress.trim()
-            : '',
+        fulfillment: FulfillmentMethod.delivery,
+        deliveryAddress: deliveryAddress.trim(),
+        deliveryLatitude: deliveryLatitude,
+        deliveryLongitude: deliveryLongitude,
       );
       await orderStore.write(_encodeOrders(newOrder: order));
       _nextOrderNumber++;
@@ -4292,9 +4318,368 @@ class _OrderHistoryContent extends StatelessWidget {
 // ============================================================
 // CHECKOUT AND GCASH-STYLE PAYMENT DEMO
 // ============================================================
+class DeliveryLocationSelection {
+  const DeliveryLocationSelection(this.point, this.suggestedAddress);
+
+  final LatLng point;
+  final String? suggestedAddress;
+}
+
+class DeliveryLocationService {
+  const DeliveryLocationService();
+
+  Future<LatLng> currentLocation() async {
+    if (!kIsWeb) {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw StateError('Turn on device location services to use GPS.');
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw StateError('Location permission was denied.');
+      }
+    }
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 18),
+      ),
+    );
+    return LatLng(position.latitude, position.longitude);
+  }
+
+  Future<String?> addressFor(LatLng point) async {
+    if (kIsWeb ||
+        (defaultTargetPlatform != TargetPlatform.android &&
+            defaultTargetPlatform != TargetPlatform.iOS &&
+            defaultTargetPlatform != TargetPlatform.macOS)) {
+      return null;
+    }
+    try {
+      final matches = await Geocoding().placemarkFromCoordinates(
+        point.latitude,
+        point.longitude,
+      );
+      if (matches.isEmpty) return null;
+      final place = matches.first;
+      final parts = [
+        place.street,
+        place.subLocality,
+        place.locality,
+        place.administrativeArea,
+        place.postalCode,
+      ];
+      final unique = <String>{};
+      final address = parts
+          .whereType<String>()
+          .map((part) => part.trim())
+          .where((part) => part.isNotEmpty && unique.add(part.toLowerCase()))
+          .join(', ');
+      return address.isEmpty ? null : address;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+class _CafeMap extends StatelessWidget {
+  const _CafeMap({
+    required this.center,
+    this.pin,
+    this.controller,
+    this.onTap,
+    this.onReady,
+    this.zoom = 15,
+  });
+
+  static const _tileUrl = String.fromEnvironment(
+    'MAP_TILE_URL',
+    defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  );
+
+  final LatLng center;
+  final LatLng? pin;
+  final MapController? controller;
+  final ValueChanged<LatLng>? onTap;
+  final VoidCallback? onReady;
+  final double zoom;
+
+  @override
+  Widget build(BuildContext context) => FlutterMap(
+    key: const Key('delivery-map'),
+    mapController: controller,
+    options: MapOptions(
+      initialCenter: center,
+      initialZoom: zoom,
+      minZoom: 3,
+      maxZoom: 19,
+      onTap: onTap == null ? null : (_, point) => onTap!(point),
+      onMapReady: onReady,
+    ),
+    children: [
+      TileLayer(
+        urlTemplate: _tileUrl,
+        userAgentPackageName: 'SmoochCafeFlutter',
+      ),
+      if (pin != null)
+        MarkerLayer(
+          markers: [
+            Marker(
+              point: pin!,
+              width: 48,
+              height: 48,
+              child: const Icon(
+                Icons.location_on,
+                size: 46,
+                color: AppColors.action,
+                shadows: [Shadow(color: Color(0x66000000), blurRadius: 8)],
+              ),
+            ),
+          ],
+        ),
+      Align(
+        alignment: Alignment.bottomRight,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Material(
+            color: AppColors.surface.withValues(alpha: .92),
+            borderRadius: BorderRadius.circular(6),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: () async {
+                await launchUrl(
+                  Uri.parse('https://www.openstreetmap.org/copyright'),
+                );
+              },
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                child: Text(
+                  '© OpenStreetMap contributors',
+                  style: TextStyle(fontSize: 10, color: AppColors.ink),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+class DeliveryMapPicker extends StatefulWidget {
+  const DeliveryMapPicker({
+    super.key,
+    this.initialPoint,
+    this.locateOnOpen = false,
+    this.locationService = const DeliveryLocationService(),
+  });
+
+  final LatLng? initialPoint;
+  final bool locateOnOpen;
+  final DeliveryLocationService locationService;
+
+  @override
+  State<DeliveryMapPicker> createState() => _DeliveryMapPickerState();
+}
+
+class _DeliveryMapPickerState extends State<DeliveryMapPicker> {
+  static const carmonaCenter = LatLng(14.3158, 121.0561);
+  final mapController = MapController();
+  LatLng? pin;
+  bool mapReady = false;
+  bool locating = false;
+  bool resolving = false;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    pin = widget.initialPoint;
+    if (widget.locateOnOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) locate();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    mapController.dispose();
+    super.dispose();
+  }
+
+  Future<void> locate() async {
+    if (locating) return;
+    setState(() {
+      locating = true;
+      error = null;
+    });
+    try {
+      final location = await widget.locationService.currentLocation();
+      if (!mounted) return;
+      setState(() => pin = location);
+      if (mapReady) mapController.move(location, 17);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => error = 'Could not use GPS. Check location access or place the pin on the map.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => locating = false);
+    }
+  }
+
+  Future<void> confirm() async {
+    if (pin == null || resolving) return;
+    setState(() => resolving = true);
+    final selected = pin!;
+    final suggestedAddress = await widget.locationService.addressFor(selected);
+    if (!mounted) return;
+    Navigator.of(context)
+        .pop(DeliveryLocationSelection(selected, suggestedAddress));
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text(
+        'Pin delivery location',
+        style: TextStyle(fontSize: 16),
+      ),
+    ),
+    body: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1000),
+        child: Stack(
+          children: [
+            _CafeMap(
+              center: pin ?? carmonaCenter,
+              pin: pin,
+              controller: mapController,
+              zoom: pin == null ? 13.5 : 16,
+              onReady: () => mapReady = true,
+              onTap: (point) => setState(() {
+                pin = point;
+                error = null;
+              }),
+            ),
+            Positioned(
+              top: 16,
+              left: 16,
+              right: 16,
+              child: Center(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0x22000000), blurRadius: 8),
+                    ],
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                    child: Text(
+                      'Tap the map to place your delivery pin',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+    bottomNavigationBar: ColoredBox(
+      color: AppColors.surface,
+      child: SafeArea(
+        top: false,
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    pin == null
+                        ? 'Place a pin, or use your current location.'
+                        : 'Pin: ${pin!.latitude.toStringAsFixed(5)}, ${pin!.longitude.toStringAsFixed(5)}',
+                    key: const Key('selected-delivery-pin'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: AppColors.ink),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AppColors.action,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    key: const Key('map-use-current-location'),
+                    onPressed: locating ? null : locate,
+                    icon: locating
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.my_location_outlined, size: 18),
+                    label: Text(locating ? 'Locating...' : 'Use my location'),
+                  ),
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                    key: const Key('confirm-delivery-pin'),
+                    onPressed: pin == null || resolving ? null : confirm,
+                    icon: resolving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check, size: 18),
+                    label: Text(
+                      resolving ? 'Finding address...' : 'Use this pin',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 class CheckoutScreen extends StatefulWidget {
-  const CheckoutScreen({super.key, required this.controller});
+  const CheckoutScreen({
+    super.key,
+    required this.controller,
+    this.locationService = const DeliveryLocationService(),
+  });
   final ShopController controller;
+  final DeliveryLocationService locationService;
 
   @override
   State<CheckoutScreen> createState() => _CheckoutScreenState();
@@ -4306,7 +4691,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final mobile = TextEditingController();
   final address = TextEditingController();
   final notes = TextEditingController();
-  FulfillmentMethod fulfillment = FulfillmentMethod.delivery;
+  LatLng? deliveryPin;
   PaymentMethod payment = PaymentMethod.cash;
   bool busy = false;
 
@@ -4325,6 +4710,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return 'Enter a valid PH mobile number';
     }
     return null;
+  }
+
+  Future<void> chooseLocation({bool useGps = false}) async {
+    final selected = await Navigator.of(context)
+        .push<DeliveryLocationSelection>(
+          MaterialPageRoute(
+            builder: (_) => DeliveryMapPicker(
+              initialPoint: deliveryPin,
+              locateOnOpen: useGps,
+              locationService: widget.locationService,
+            ),
+          ),
+        );
+    if (!mounted || selected == null) return;
+    setState(() => deliveryPin = selected.point);
+    if (address.text.trim().isEmpty &&
+        selected.suggestedAddress?.isNotEmpty == true) {
+      address.text = selected.suggestedAddress!;
+    }
   }
 
   Future<void> placeOrder() async {
@@ -4347,8 +4751,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         mobileNumber: mobile.text,
         notes: notes.text,
         paymentMethod: payment,
-        fulfillment: fulfillment,
         deliveryAddress: address.text,
+        deliveryLatitude: deliveryPin?.latitude,
+        deliveryLongitude: deliveryPin?.longitude,
       );
       if (!mounted || order == null) return;
       Navigator.of(context).pushAndRemoveUntil<void>(
@@ -4394,34 +4799,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   Text('Almost yours.', style: displayStyle(32)),
                   const SizedBox(height: 8),
                   const Text(
-                    'Choose delivery or pickup, then tell us how to reach you.',
+                    'Tell us where to bring your order and how to reach you.',
                     style: TextStyle(
                       color: AppColors.secondaryText,
                       height: 1.5,
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  _PaymentChoice(
-                    key: const Key('fulfillment-delivery'),
-                    title: 'Delivery',
-                    subtitle: 'Bring your order to your address',
-                    icon: Icons.delivery_dining_outlined,
-                    selected: fulfillment == FulfillmentMethod.delivery,
-                    onTap: () => setState(
-                      () => fulfillment = FulfillmentMethod.delivery,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _PaymentChoice(
-                    key: const Key('fulfillment-pickup'),
-                    title: 'Pickup',
-                    subtitle: 'Collect your order at the cafe',
-                    icon: Icons.storefront_outlined,
-                    selected: fulfillment == FulfillmentMethod.pickup,
-                    onTap: () =>
-                        setState(() => fulfillment = FulfillmentMethod.pickup),
-                  ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
                   TextFormField(
                     key: const Key('customer-name'),
                     controller: name,
@@ -4449,34 +4833,71 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     validator: validateMobile,
                   ),
                   const SizedBox(height: 18),
-                  if (fulfillment == FulfillmentMethod.delivery) ...[
-                    TextFormField(
-                      key: const Key('delivery-address'),
-                      controller: address,
-                      maxLines: 2,
-                      textCapitalization: TextCapitalization.words,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: 'Delivery address *',
-                        hintText: 'House number, street, barangay, city',
-                        prefixIcon: Icon(Icons.location_on_outlined),
-                        alignLabelWithHint: true,
-                      ),
-                      validator: (value) => (value ?? '').trim().length < 8
-                          ? 'Enter your delivery address'
-                          : null,
+                  TextFormField(
+                    key: const Key('delivery-address'),
+                    controller: address,
+                    maxLines: 2,
+                    textCapitalization: TextCapitalization.words,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Delivery address *',
+                      hintText: 'House number, street, barangay, city',
+                      prefixIcon: Icon(Icons.location_on_outlined),
+                      alignLabelWithHint: true,
                     ),
-                    const SizedBox(height: 18),
+                    validator: (value) => (value ?? '').trim().length < 8
+                        ? 'Enter your delivery address'
+                        : null,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Check the street and house number if you use GPS.',
+                    style: TextStyle(
+                      color: AppColors.secondaryText,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        key: const Key('use-gps-address'),
+                        onPressed: () => chooseLocation(useGps: true),
+                        icon: const Icon(Icons.my_location_outlined, size: 18),
+                        label: const Text('Use GPS'),
+                      ),
+                      OutlinedButton.icon(
+                        key: const Key('choose-map-address'),
+                        onPressed: chooseLocation,
+                        icon: const Icon(Icons.map_outlined, size: 18),
+                        label: Text(
+                          deliveryPin == null ? 'Choose on map' : 'Move pin',
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (deliveryPin != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Delivery pin: ${deliveryPin!.latitude.toStringAsFixed(5)}, ${deliveryPin!.longitude.toStringAsFixed(5)}',
+                      key: const Key('checkout-delivery-pin'),
+                      style: const TextStyle(
+                        color: AppColors.teal,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
+                  const SizedBox(height: 18),
                   TextFormField(
                     key: const Key('customer-notes'),
                     controller: notes,
                     maxLines: 3,
                     maxLength: 200,
-                    decoration: InputDecoration(
-                      labelText: fulfillment == FulfillmentMethod.delivery
-                          ? 'Delivery notes (optional)'
-                          : 'Pickup notes (optional)',
+                    decoration: const InputDecoration(
+                      labelText: 'Delivery notes (optional)',
                       alignLabelWithHint: true,
                       hintText: 'Anything the cafe should know?',
                     ),
@@ -4486,12 +4907,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   const SizedBox(height: 12),
                   _PaymentChoice(
                     key: const Key('payment-cash'),
-                    title: fulfillment == FulfillmentMethod.delivery
-                        ? 'Cash on delivery'
-                        : 'Cash at pickup',
-                    subtitle: fulfillment == FulfillmentMethod.delivery
-                        ? 'Pay when your order arrives'
-                        : 'Pay when you collect your order',
+                    title: 'Cash on delivery',
+                    subtitle: 'Pay when your order arrives',
                     icon: Icons.payments_outlined,
                     selected: payment == PaymentMethod.cash,
                     onTap: () => setState(() => payment = PaymentMethod.cash),
@@ -4520,7 +4937,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       runSpacing: 8,
                       children: [
                         Text(
-                          '${widget.controller.cartCount} ${widget.controller.cartCount == 1 ? 'item' : 'items'} · ${fulfillment == FulfillmentMethod.delivery ? 'Delivery' : 'Pickup'}',
+                          '${widget.controller.cartCount} ${widget.controller.cartCount == 1 ? 'item' : 'items'} · Delivery',
                         ),
                         Text(
                           pesos(widget.controller.total),
@@ -5528,6 +5945,28 @@ class OrderConfirmationScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(order.deliveryAddress),
+                        if (order.deliveryPoint case final point?) ...[
+                          const SizedBox(height: 12),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: SizedBox(
+                              height: 180,
+                              child: _CafeMap(
+                                center: point,
+                                pin: point,
+                                zoom: 16,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Pinned delivery location',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.secondaryText,
+                            ),
+                          ),
+                        ],
                       ],
                       if (order.notes.isNotEmpty) ...[
                         const SizedBox(height: 4),

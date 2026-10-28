@@ -1,6 +1,8 @@
 import 'package:ecommerce/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_map/flutter_map.dart' show FlutterMap, TapPosition;
+import 'package:latlong2/latlong.dart' show LatLng;
 
 void main() {
   OrderReceipt receipt(
@@ -85,7 +87,7 @@ void main() {
       mobileNumber: '09171234567',
       notes: '',
       paymentMethod: PaymentMethod.cash,
-      fulfillment: FulfillmentMethod.delivery,
+      deliveryAddress: '',
     );
     expect(missingAddress, isNull);
     expect(shop.cartCount, 1);
@@ -95,11 +97,15 @@ void main() {
       mobileNumber: '09171234567',
       notes: '',
       paymentMethod: PaymentMethod.cash,
-      fulfillment: FulfillmentMethod.delivery,
       deliveryAddress: '  12 Rizal Street, Carmona  ',
+      deliveryLatitude: 14.3158,
+      deliveryLongitude: 121.0561,
     );
     expect(saved?.deliveryAddress, '12 Rizal Street, Carmona');
     expect(saved?.reference, 'SMC-0001');
+    final restored = OrderReceipt.fromJson(saved!.toJson());
+    expect(restored.deliveryLatitude, 14.3158);
+    expect(restored.deliveryLongitude, 121.0561);
   });
 
   testWidgets('Receipt timeline advances every ten seconds', (tester) async {
@@ -146,7 +152,6 @@ void main() {
       mobileNumber: '09171234567',
       notes: '',
       paymentMethod: PaymentMethod.cash,
-      fulfillment: FulfillmentMethod.delivery,
       deliveryAddress: '12 Rizal Street, Carmona, Cavite',
     );
     await tester.pumpWidget(
@@ -164,7 +169,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Checkout requires an address for delivery but not pickup', (
+  testWidgets('Checkout is delivery-only and requires an address', (
     tester,
   ) async {
     final shop = ShopController(repository: const MenuRepository());
@@ -177,6 +182,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('fulfillment-pickup')), findsNothing);
+    expect(find.byKey(const Key('fulfillment-delivery')), findsNothing);
     await tester.enterText(find.byKey(const Key('customer-name')), 'Ana Cruz');
     await tester.enterText(
       find.byKey(const Key('customer-mobile')),
@@ -186,18 +193,102 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Enter your delivery address'), findsOneWidget);
     expect(shop.orders, isEmpty);
-
-    final pickup = find.byKey(const Key('fulfillment-pickup'));
-    await tester.ensureVisible(pickup);
-    await tester.pumpAndSettle();
-    await tester.tap(pickup);
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('delivery-address')), findsNothing);
+    await tester.enterText(
+      find.byKey(const Key('delivery-address')),
+      '12 Rizal Street, Carmona, Cavite',
+    );
     await tester.tap(find.byKey(const Key('place-order')));
     await tester.pumpAndSettle();
-    expect(shop.orders.single.fulfillment, FulfillmentMethod.pickup);
-    expect(find.text('Ready for pickup'), findsOneWidget);
-    expect(find.text('Rider assigned'), findsNothing);
+    expect(shop.orders.single.fulfillment, FulfillmentMethod.delivery);
+    expect(find.text('Rider assigned'), findsOneWidget);
+    expect(find.text('Ready for pickup'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('GPS fills the editable address and saves the map pin', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final shop = ShopController(repository: const MenuRepository());
+    addTearDown(shop.dispose);
+    shop.addToCart(shop.products.first);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.theme,
+        home: CheckoutScreen(
+          controller: shop,
+          locationService: const _FakeLocationService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final gps = find.byKey(const Key('use-gps-address'));
+    await tester.ensureVisible(gps);
+    await tester.pumpAndSettle();
+    await tester.tap(gps);
+    await tester.pumpAndSettle();
+    expect(find.byType(DeliveryMapPicker), findsOneWidget);
+    expect(find.textContaining('14.31580'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('confirm-delivery-pin')));
+    await tester.pumpAndSettle();
+    expect(find.byType(DeliveryMapPicker), findsNothing);
+    expect(
+      tester
+          .widget<TextFormField>(find.byKey(const Key('delivery-address')))
+          .controller!
+          .text,
+      '12 Rizal Street, Carmona, Cavite',
+    );
+    expect(find.byKey(const Key('checkout-delivery-pin')), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('customer-name')), 'Ana Cruz');
+    await tester.enterText(
+      find.byKey(const Key('customer-mobile')),
+      '09171234567',
+    );
+    await tester.tap(find.byKey(const Key('place-order')));
+    await tester.pumpAndSettle();
+    expect(shop.orders.single.deliveryLatitude, 14.3158);
+    expect(shop.orders.single.deliveryLongitude, 121.0561);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Map tap places a delivery pin without GPS', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      const MaterialApp(home: DeliveryMapPicker()),
+    );
+    await tester.pumpAndSettle();
+    final confirm = find.byKey(const Key('confirm-delivery-pin'));
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+    final map = tester.widget<FlutterMap>(
+      find.byKey(const Key('delivery-map')),
+    );
+    map.options.onTap!(
+      const TapPosition(Offset.zero, null),
+      const LatLng(14.3158, 121.0561),
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(confirm).onPressed, isNotNull);
+    expect(find.textContaining('Pin:'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+class _FakeLocationService extends DeliveryLocationService {
+  const _FakeLocationService();
+
+  @override
+  Future<LatLng> currentLocation() async => const LatLng(14.3158, 121.0561);
+
+  @override
+  Future<String?> addressFor(LatLng point) async =>
+      '12 Rizal Street, Carmona, Cavite';
 }

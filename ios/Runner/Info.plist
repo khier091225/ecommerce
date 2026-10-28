@@ -8,6 +8,8 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>Smooch Cafe</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Smooch Cafe uses your location when you choose a delivery address on the map.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

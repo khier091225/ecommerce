@@ -136,6 +136,7 @@ void main() {
         mobileNumber: '09171234567',
         notes: '',
         paymentMethod: PaymentMethod.cash,
+        deliveryAddress: '12 Rizal Street, Carmona, Cavite',
       );
       shop.addToCart(shop.products.first);
       await openMenu(tester);
@@ -194,6 +195,7 @@ void main() {
       mobileNumber: '09171234567',
       notes: '',
       paymentMethod: PaymentMethod.cash,
+      deliveryAddress: '12 Rizal Street, Carmona, Cavite',
     );
     await openMenu(tester, size: const Size(1024, 768));
     expect(find.text('Favorites'), findsNothing);
@@ -203,7 +205,7 @@ void main() {
     expect(find.byKey(const Key('history-SMC-0001')), findsOneWidget);
     await tester.tap(find.byKey(const Key('history-SMC-0001')));
     await tester.pumpAndSettle();
-    expect(find.text('Pickup for Juan Dela Cruz'), findsOneWidget);
+    expect(find.text('Delivery for Juan Dela Cruz'), findsOneWidget);
     await tester.tap(find.byKey(const Key('continue-shopping')));
     await tester.pumpAndSettle();
     expect(find.text('Your orders'), findsOneWidget);

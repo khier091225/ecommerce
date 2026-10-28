@@ -165,6 +165,7 @@ void main() {
         mobileNumber: '09171234567',
         notes: '',
         paymentMethod: PaymentMethod.cash,
+        deliveryAddress: '12 Rizal Street, Carmona, Cavite',
       ))!;
       await tester.pumpWidget(
         MaterialApp(
