@@ -244,6 +244,77 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Product photo flies toward the bag when Add is tapped', (
+    tester,
+  ) async {
+    await openMenu(tester);
+    final add = find.byKey(const Key('add-coffee-tiramisu-latte'));
+    await tester.scrollUntilVisible(
+      add,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(CustomScrollView).first,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(add);
+    await tester.pump();
+    final flight = find.byKey(const Key('cart-flight-coffee-tiramisu-latte'));
+    final bag = find.byKey(const Key('cart-pulse'));
+    expect(flight, findsOneWidget);
+    expect(shop.cartCount, 1);
+    final initialDistance =
+        (tester.getCenter(flight) - tester.getCenter(bag)).distance;
+    await tester.pump(const Duration(milliseconds: 650));
+    expect(flight, findsOneWidget);
+    expect(
+      (tester.getCenter(flight) - tester.getCenter(bag)).distance,
+      lessThan(initialDistance),
+    );
+    await tester.pumpAndSettle();
+    expect(flight, findsNothing);
+    expect(shop.cartCount, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Details Add flies to the bag before returning to menu', (
+    tester,
+  ) async {
+    await openMenu(tester);
+    final product = find.byKey(const Key('product-coffee-tiramisu-latte'));
+    await tester.scrollUntilVisible(
+      product,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(CustomScrollView).first,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(product);
+    await tester.pumpAndSettle();
+    final add = find.byKey(const Key('details-add-to-cart'));
+    await tester.ensureVisible(add);
+    await tester.pumpAndSettle();
+    await tester.tap(add);
+    await tester.pump();
+    expect(shop.cartCount, 1);
+    expect(
+      find.byKey(const Key('cart-flight-coffee-tiramisu-latte')),
+      findsOneWidget,
+    );
+    expect(tester.widget<FilledButton>(add).onPressed, isNull);
+    await tester.pumpAndSettle();
+    expect(find.byType(ProductDetailsScreen), findsNothing);
+    expect(shop.cartCount, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Add feedback resets while rapid taps still increase the bag', (
     tester,
   ) async {
@@ -275,7 +346,7 @@ void main() {
     await tester.tap(add);
     await tester.pump();
     expect(shop.cartCount, 2);
-    await tester.pump(const Duration(milliseconds: 720));
+    await tester.pump(const Duration(milliseconds: 1200));
     await tester.pump(const Duration(milliseconds: 220));
     expect(
       find.descendant(of: add, matching: find.text('Add')),
@@ -295,7 +366,7 @@ void main() {
       find.descendant(of: add, matching: find.byIcon(Icons.check)),
       findsOneWidget,
     );
-    await tester.pump(const Duration(milliseconds: 720));
+    await tester.pump(const Duration(milliseconds: 1200));
     await tester.pump(const Duration(milliseconds: 220));
     expect(
       find.descendant(of: add, matching: find.byIcon(Icons.add)),
@@ -344,6 +415,10 @@ void main() {
     );
     expect(feedback.duration, Duration.zero);
     expect(feedback.scale, 1);
+    expect(
+      find.byKey(const Key('cart-flight-coffee-tiramisu-latte')),
+      findsNothing,
+    );
     expect(
       tester
           .widget<ScaleTransition>(find.byKey(const Key('cart-pulse')))

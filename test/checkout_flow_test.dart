@@ -33,6 +33,10 @@ void main() {
         find.byKey(const Key('customer-mobile')),
         '09171234567',
       );
+      await tester.enterText(
+        find.byKey(const Key('delivery-address')),
+        '12 Rizal Street, Carmona, Cavite',
+      );
       await Scrollable.ensureVisible(
         tester.element(find.byKey(const Key('payment-digital'))),
       );
@@ -90,7 +94,7 @@ void main() {
       expect(find.byKey(const Key('history-SMC-0001')), findsOneWidget);
       await tester.tap(find.byKey(const Key('history-SMC-0001')));
       await tester.pumpAndSettle();
-      expect(find.text('Pickup for Juan Dela Cruz'), findsOneWidget);
+      expect(find.text('Delivery for Juan Dela Cruz'), findsOneWidget);
       await tester.tap(find.byKey(const Key('continue-shopping')));
       await tester.pumpAndSettle();
       expect(find.text('Your orders'), findsOneWidget);

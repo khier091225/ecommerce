@@ -57,6 +57,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Enter your name'), findsOneWidget);
       expect(find.text('Enter a valid PH mobile number'), findsOneWidget);
+      expect(find.text('Enter your delivery address'), findsOneWidget);
       expect(shop.cartCount, 2);
       await tester.enterText(
         find.byKey(const Key('customer-name')),
@@ -65,6 +66,10 @@ void main() {
       await tester.enterText(
         find.byKey(const Key('customer-mobile')),
         '09171234567',
+      );
+      await tester.enterText(
+        find.byKey(const Key('delivery-address')),
+        '12 Rizal Street, Carmona, Cavite',
       );
       await Scrollable.ensureVisible(
         tester.element(find.byKey(const Key('place-order'))),
@@ -78,10 +83,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(OrderConfirmationScreen), findsOneWidget);
       expect(find.byType(CartScreen, skipOffstage: false), findsNothing);
-      expect(find.text('Order confirmed.'), findsOneWidget);
-      expect(find.text('Pickup for Juan Dela Cruz'), findsOneWidget);
+      expect(find.text('Order placed.'), findsOneWidget);
+      expect(find.text('Delivery for Juan Dela Cruz'), findsOneWidget);
+      expect(find.text('12 Rizal Street, Carmona, Cavite'), findsOneWidget);
       expect(
-        find.text('Cash at pickup · Payment due at pickup'),
+        find.text('Cash on delivery · Payment due on delivery'),
         findsOneWidget,
       );
       expect(
@@ -119,6 +125,10 @@ void main() {
       await tester.enterText(
         find.byKey(const Key('customer-mobile')),
         '+639171234567',
+      );
+      await tester.enterText(
+        find.byKey(const Key('delivery-address')),
+        '12 Rizal Street, Carmona, Cavite',
       );
       await Scrollable.ensureVisible(
         tester.element(find.byKey(const Key('place-order'))),

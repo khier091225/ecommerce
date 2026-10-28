@@ -251,6 +251,40 @@ String orderDate(DateTime value) {
   return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
 }
 
+enum FulfillmentMethod { pickup, delivery }
+
+enum OrderStage {
+  confirmed,
+  preparing,
+  riderAssigned,
+  onTheWay,
+  delivered,
+  readyForPickup,
+}
+
+extension OrderStageDetails on OrderStage {
+  String get label => switch (this) {
+    OrderStage.confirmed => 'Confirmed',
+    OrderStage.preparing => 'Preparing',
+    OrderStage.riderAssigned => 'Rider assigned',
+    OrderStage.onTheWay => 'On the way',
+    OrderStage.delivered => 'Delivered',
+    OrderStage.readyForPickup => 'Ready for pickup',
+  };
+
+  String get message => switch (this) {
+    OrderStage.confirmed =>
+      'The restaurant has received and accepted your order.',
+    OrderStage.preparing =>
+      'The kitchen is preparing and packaging your order.',
+    OrderStage.riderAssigned =>
+      'A delivery partner has been assigned and picked up your order.',
+    OrderStage.onTheWay => 'Your rider is heading to your delivery address.',
+    OrderStage.delivered => 'Your order has arrived at your address.',
+    OrderStage.readyForPickup => 'Your order is ready for collection.',
+  };
+}
+
 @immutable
 class OrderReceipt {
   OrderReceipt({
@@ -261,6 +295,8 @@ class OrderReceipt {
     required this.notes,
     required this.paymentMethod,
     required this.createdAt,
+    this.fulfillment = FulfillmentMethod.pickup,
+    this.deliveryAddress = '',
   }) : items = List.unmodifiable(items);
 
   final String reference;
@@ -270,8 +306,32 @@ class OrderReceipt {
   final String notes;
   final PaymentMethod paymentMethod;
   final DateTime createdAt;
+  final FulfillmentMethod fulfillment;
+  final String deliveryAddress;
+  List<OrderStage> get stages => fulfillment == FulfillmentMethod.delivery
+      ? const [
+          OrderStage.confirmed,
+          OrderStage.preparing,
+          OrderStage.riderAssigned,
+          OrderStage.onTheWay,
+          OrderStage.delivered,
+        ]
+      : const [
+          OrderStage.confirmed,
+          OrderStage.preparing,
+          OrderStage.readyForPickup,
+        ];
+
+  OrderStage stageAt(DateTime now) {
+    final elapsedSeconds = now.difference(createdAt).inSeconds;
+    final index = (elapsedSeconds ~/ 10).clamp(0, stages.length - 1);
+    return stages[index];
+  }
+
   String get paymentStatus => paymentMethod == PaymentMethod.cash
-      ? 'Payment due at pickup'
+      ? fulfillment == FulfillmentMethod.delivery
+            ? 'Payment due on delivery'
+            : 'Payment due at pickup'
       : 'Payment step complete';
   int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
   int get total => items.fold(0, (sum, item) => sum + item.total);
@@ -284,6 +344,8 @@ class OrderReceipt {
     'notes': notes,
     'paymentMethod': paymentMethod.name,
     'createdAt': createdAt.toIso8601String(),
+    'fulfillment': fulfillment.name,
+    'deliveryAddress': deliveryAddress,
   };
 
   factory OrderReceipt.fromJson(Map<String, dynamic> json) => OrderReceipt(
@@ -298,6 +360,10 @@ class OrderReceipt {
       json['paymentMethod'] as String? ?? 'cash',
     ),
     createdAt: DateTime.parse(json['createdAt'] as String),
+    fulfillment: FulfillmentMethod.values.byName(
+      json['fulfillment'] as String? ?? 'pickup',
+    ),
+    deliveryAddress: json['deliveryAddress'] as String? ?? '',
   );
 }
 
@@ -1437,8 +1503,15 @@ class ShopController extends ChangeNotifier {
     required String mobileNumber,
     required String notes,
     required PaymentMethod paymentMethod,
+    FulfillmentMethod fulfillment = FulfillmentMethod.pickup,
+    String deliveryAddress = '',
   }) async {
-    if (_cart.isEmpty || _placingOrder) return null;
+    if (_cart.isEmpty ||
+        _placingOrder ||
+        (fulfillment == FulfillmentMethod.delivery &&
+            deliveryAddress.trim().length < 8)) {
+      return null;
+    }
     _placingOrder = true;
     notifyListeners();
     try {
@@ -1451,6 +1524,10 @@ class ShopController extends ChangeNotifier {
         notes: notes.trim(),
         paymentMethod: paymentMethod,
         createdAt: DateTime.now(),
+        fulfillment: fulfillment,
+        deliveryAddress: fulfillment == FulfillmentMethod.delivery
+            ? deliveryAddress.trim()
+            : '',
       );
       await orderStore.write(_encodeOrders(newOrder: order));
       _nextOrderNumber++;
@@ -1589,9 +1666,11 @@ class CartButton extends StatefulWidget {
     super.key,
     required this.controller,
     required this.onPressed,
+    this.flightTargetKey,
   });
   final ShopController controller;
   final VoidCallback onPressed;
+  final GlobalKey? flightTargetKey;
 
   @override
   State<CartButton> createState() => _CartButtonState();
@@ -1672,15 +1751,162 @@ class _CartButtonState extends State<CartButton>
       icon: ScaleTransition(
         key: const Key('cart-pulse'),
         scale: pulseScale,
-        child: Badge(
-          isLabelVisible: widget.controller.cartCount > 0,
-          backgroundColor: AppColors.action,
-          label: Text('${widget.controller.cartCount}'),
-          child: const Icon(
-            Icons.shopping_bag_outlined,
-            color: AppColors.white,
+        child: SizedBox(
+          key: widget.flightTargetKey,
+          child: Badge(
+            isLabelVisible: widget.controller.cartCount > 0,
+            backgroundColor: AppColors.action,
+            label: Text('${widget.controller.cartCount}'),
+            child: const Icon(
+              Icons.shopping_bag_outlined,
+              color: AppColors.white,
+            ),
           ),
         ),
+      ),
+    ),
+  );
+}
+
+Future<void> _flyProductToCart(
+  BuildContext source,
+  Product product,
+  GlobalKey targetKey,
+) {
+  if (!source.mounted || MediaQuery.disableAnimationsOf(source)) {
+    return Future<void>.value();
+  }
+  final overlay = Overlay.maybeOf(source, rootOverlay: true);
+  final sourceBox = source.findRenderObject();
+  final targetBox = targetKey.currentContext?.findRenderObject();
+  final overlayBox = overlay?.context.findRenderObject();
+  if (overlay == null ||
+      sourceBox is! RenderBox ||
+      targetBox is! RenderBox ||
+      overlayBox is! RenderBox ||
+      !sourceBox.attached ||
+      !targetBox.attached ||
+      !overlayBox.attached) {
+    return Future<void>.value();
+  }
+  final start = overlayBox.globalToLocal(
+    sourceBox.localToGlobal(sourceBox.size.center(Offset.zero)),
+  );
+  final end = overlayBox.globalToLocal(
+    targetBox.localToGlobal(targetBox.size.center(Offset.zero)),
+  );
+  final finished = Completer<void>();
+  late final OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (_) => _CartFlightOverlay(
+      product: product,
+      start: start,
+      end: end,
+      onFinished: () {
+        entry.remove();
+        entry.dispose();
+        if (!finished.isCompleted) finished.complete();
+      },
+    ),
+  );
+  overlay.insert(entry);
+  return finished.future;
+}
+
+class _CartFlightOverlay extends StatefulWidget {
+  const _CartFlightOverlay({
+    required this.product,
+    required this.start,
+    required this.end,
+    required this.onFinished,
+  });
+
+  final Product product;
+  final Offset start;
+  final Offset end;
+  final VoidCallback onFinished;
+
+  @override
+  State<_CartFlightOverlay> createState() => _CartFlightOverlayState();
+}
+
+class _CartFlightOverlayState extends State<_CartFlightOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController flight;
+
+  @override
+  void initState() {
+    super.initState();
+    flight =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 1100),
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.completed) {
+            scheduleMicrotask(widget.onFinished);
+          }
+        });
+    flight.forward();
+  }
+
+  @override
+  void dispose() {
+    flight.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    left: widget.start.dx - 34,
+    top: widget.start.dy - 34,
+    child: IgnorePointer(
+      child: AnimatedBuilder(
+        animation: flight,
+        child: RepaintBoundary(
+          key: Key('cart-flight-${widget.product.id}'),
+          child: Container(
+            width: 68,
+            height: 68,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x33000000),
+                  blurRadius: 12,
+                  offset: Offset(0, 5),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(3),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(11),
+              child: ExcludeSemantics(
+                child: ProductImage(product: widget.product),
+              ),
+            ),
+          ),
+        ),
+        builder: (context, child) {
+          final progress = Curves.easeInOutCubic.transform(flight.value);
+          final arc =
+              math.sin(math.pi * progress) *
+              math.min(80.0, (widget.start.dy - widget.end.dy).abs() * .2);
+          final opacity = progress < .8 ? 1.0 : (1 - progress) / .2;
+          return Transform.translate(
+            offset: Offset(
+              (widget.end.dx - widget.start.dx) * progress,
+              (widget.end.dy - widget.start.dy) * progress - arc,
+            ),
+            child: Opacity(
+              opacity: opacity.clamp(0.0, 1.0),
+              child: Transform.scale(
+                scale: 1 - (52 / 68) * progress,
+                child: Transform.rotate(angle: progress * .22, child: child),
+              ),
+            ),
+          );
+        },
       ),
     ),
   );
@@ -2126,6 +2352,7 @@ class MenuScreen extends StatefulWidget {
 
 class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
   int tab = 0;
+  final cartFlightTarget = GlobalKey();
   final search = TextEditingController();
   final orderScroll = ScrollController();
   final cafeScroll = ScrollController();
@@ -2322,7 +2549,11 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
                         ),
                       const SizedBox(width: 20),
                     ],
-                    CartButton(controller: shop, onPressed: openCart),
+                    CartButton(
+                      controller: shop,
+                      onPressed: openCart,
+                      flightTargetKey: cartFlightTarget,
+                    ),
                   ],
                 ),
               ),
@@ -3187,6 +3418,12 @@ class _AnimatedAddButtonState extends State<_AnimatedAddButton> {
     final previousCount = widget.controller.cartCount;
     widget.controller.addToCart(widget.product);
     if (widget.controller.cartCount == previousCount) return;
+    final targetKey = context
+        .findAncestorStateOfType<_MenuScreenState>()
+        ?.cartFlightTarget;
+    if (targetKey != null) {
+      unawaited(_flyProductToCart(context, widget.product, targetKey));
+    }
     resetTimer?.cancel();
     pressTimer?.cancel();
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
@@ -3485,6 +3722,28 @@ class ProductDetailsScreen extends StatefulWidget {
 
 class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   int quantity = 1;
+  bool adding = false;
+  final cartFlightTarget = GlobalKey();
+
+  Future<void> addToCart(BuildContext buttonContext) async {
+    if (adding) return;
+    final addedQuantity = quantity;
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => adding = true);
+    widget.controller.addToCart(widget.product, quantity: addedQuantity);
+    await _flyProductToCart(buttonContext, widget.product, cartFlightTarget);
+    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+    navigator.pop();
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '$addedQuantity × ${widget.product.name} added to your bag.',
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -3493,6 +3752,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       actions: [
         CartButton(
           controller: widget.controller,
+          flightTargetKey: cartFlightTarget,
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => CartScreen(controller: widget.controller),
@@ -3578,30 +3838,19 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         const SizedBox(height: 28),
                         SizedBox(
                           width: double.infinity,
-                          child: FilledButton.icon(
-                            key: const Key('details-add-to-cart'),
-                            onPressed: () {
-                              widget.controller.addToCart(
-                                widget.product,
-                                quantity: quantity,
-                              );
-                              Navigator.of(context).pop();
-                              ScaffoldMessenger.of(context)
-                                  .hideCurrentSnackBar();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '$quantity × ${widget.product.name} added to your bag.',
-                                  ),
-                                ),
-                              );
-                            },
-                            icon: const Icon(
-                              Icons.shopping_bag_outlined,
-                              size: 18,
-                            ),
-                            label: Text(
-                              'Add to bag • ${pesos(widget.product.price * quantity)}',
+                          child: Builder(
+                            builder: (buttonContext) => FilledButton.icon(
+                              key: const Key('details-add-to-cart'),
+                              onPressed: adding
+                                  ? null
+                                  : () => addToCart(buttonContext),
+                              icon: const Icon(
+                                Icons.shopping_bag_outlined,
+                                size: 18,
+                              ),
+                              label: Text(
+                                'Add to bag • ${pesos(widget.product.price * quantity)}',
+                              ),
                             ),
                           ),
                         ),
@@ -4003,8 +4252,17 @@ class _OrderHistoryContent extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: OrderTracking(
+                                  key: ValueKey('tracking-${order.reference}'),
+                                  order: order,
+                                  compact: true,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
                               Text(
-                                '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'} · ${order.paymentStatus}',
+                                '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'} · ${order.fulfillment == FulfillmentMethod.delivery ? 'Delivery' : 'Pickup'} · ${order.paymentStatus}',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.secondaryText,
@@ -4046,7 +4304,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final form = GlobalKey<FormState>();
   final name = TextEditingController();
   final mobile = TextEditingController();
+  final address = TextEditingController();
   final notes = TextEditingController();
+  FulfillmentMethod fulfillment = FulfillmentMethod.delivery;
   PaymentMethod payment = PaymentMethod.cash;
   bool busy = false;
 
@@ -4054,6 +4314,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void dispose() {
     name.dispose();
     mobile.dispose();
+    address.dispose();
     notes.dispose();
     super.dispose();
   }
@@ -4086,6 +4347,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         mobileNumber: mobile.text,
         notes: notes.text,
         paymentMethod: payment,
+        fulfillment: fulfillment,
+        deliveryAddress: address.text,
       );
       if (!mounted || order == null) return;
       Navigator.of(context).pushAndRemoveUntil<void>(
@@ -4126,18 +4389,39 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Eyebrow('Pickup details'),
+                  const Eyebrow('Order details'),
                   const SizedBox(height: 10),
                   Text('Almost yours.', style: displayStyle(32)),
                   const SizedBox(height: 8),
                   const Text(
-                    'Enter the details the cafe would use to identify your pickup order.',
+                    'Choose delivery or pickup, then tell us how to reach you.',
                     style: TextStyle(
                       color: AppColors.secondaryText,
                       height: 1.5,
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
+                  _PaymentChoice(
+                    key: const Key('fulfillment-delivery'),
+                    title: 'Delivery',
+                    subtitle: 'Bring your order to your address',
+                    icon: Icons.delivery_dining_outlined,
+                    selected: fulfillment == FulfillmentMethod.delivery,
+                    onTap: () => setState(
+                      () => fulfillment = FulfillmentMethod.delivery,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _PaymentChoice(
+                    key: const Key('fulfillment-pickup'),
+                    title: 'Pickup',
+                    subtitle: 'Collect your order at the cafe',
+                    icon: Icons.storefront_outlined,
+                    selected: fulfillment == FulfillmentMethod.pickup,
+                    onTap: () =>
+                        setState(() => fulfillment = FulfillmentMethod.pickup),
+                  ),
+                  const SizedBox(height: 24),
                   TextFormField(
                     key: const Key('customer-name'),
                     controller: name,
@@ -4165,13 +4449,34 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     validator: validateMobile,
                   ),
                   const SizedBox(height: 18),
+                  if (fulfillment == FulfillmentMethod.delivery) ...[
+                    TextFormField(
+                      key: const Key('delivery-address'),
+                      controller: address,
+                      maxLines: 2,
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Delivery address *',
+                        hintText: 'House number, street, barangay, city',
+                        prefixIcon: Icon(Icons.location_on_outlined),
+                        alignLabelWithHint: true,
+                      ),
+                      validator: (value) => (value ?? '').trim().length < 8
+                          ? 'Enter your delivery address'
+                          : null,
+                    ),
+                    const SizedBox(height: 18),
+                  ],
                   TextFormField(
                     key: const Key('customer-notes'),
                     controller: notes,
                     maxLines: 3,
                     maxLength: 200,
-                    decoration: const InputDecoration(
-                      labelText: 'Pickup notes (optional)',
+                    decoration: InputDecoration(
+                      labelText: fulfillment == FulfillmentMethod.delivery
+                          ? 'Delivery notes (optional)'
+                          : 'Pickup notes (optional)',
                       alignLabelWithHint: true,
                       hintText: 'Anything the cafe should know?',
                     ),
@@ -4181,8 +4486,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   const SizedBox(height: 12),
                   _PaymentChoice(
                     key: const Key('payment-cash'),
-                    title: 'Cash at pickup',
-                    subtitle: 'Pay when you collect your order',
+                    title: fulfillment == FulfillmentMethod.delivery
+                        ? 'Cash on delivery'
+                        : 'Cash at pickup',
+                    subtitle: fulfillment == FulfillmentMethod.delivery
+                        ? 'Pay when your order arrives'
+                        : 'Pay when you collect your order',
                     icon: Icons.payments_outlined,
                     selected: payment == PaymentMethod.cash,
                     onTap: () => setState(() => payment = PaymentMethod.cash),
@@ -4211,7 +4520,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       runSpacing: 8,
                       children: [
                         Text(
-                          '${widget.controller.cartCount} ${widget.controller.cartCount == 1 ? 'item' : 'items'} · Pickup',
+                          '${widget.controller.cartCount} ${widget.controller.cartCount == 1 ? 'item' : 'items'} · ${fulfillment == FulfillmentMethod.delivery ? 'Delivery' : 'Pickup'}',
                         ),
                         Text(
                           pesos(widget.controller.total),
@@ -4863,6 +5172,237 @@ class _PaymentDemoNotice extends StatelessWidget {
 // ============================================================
 // ORDER CONFIRMATION
 // ============================================================
+class OrderTracking extends StatefulWidget {
+  const OrderTracking({super.key, required this.order, this.compact = false});
+
+  final OrderReceipt order;
+  final bool compact;
+
+  @override
+  State<OrderTracking> createState() => _OrderTrackingState();
+}
+
+class _OrderTrackingState extends State<OrderTracking>
+    with WidgetsBindingObserver {
+  late OrderStage stage;
+  Timer? transitionTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    stage = widget.order.stageAt(DateTime.now());
+    scheduleNextTransition();
+  }
+
+  @override
+  void didUpdateWidget(OrderTracking oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.order.reference != widget.order.reference ||
+        oldWidget.order.createdAt != widget.order.createdAt ||
+        oldWidget.order.fulfillment != widget.order.fulfillment) {
+      transitionTimer?.cancel();
+      stage = widget.order.stageAt(DateTime.now());
+      scheduleNextTransition();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    final current = widget.order.stageAt(DateTime.now());
+    if (widget.order.stages.indexOf(current) >
+        widget.order.stages.indexOf(stage)) {
+      setState(() => stage = current);
+    }
+    transitionTimer?.cancel();
+    scheduleNextTransition();
+  }
+
+  void scheduleNextTransition() {
+    if (stage == widget.order.stages.last) return;
+    final nextAt = widget.order.createdAt.add(
+      Duration(seconds: (widget.order.stages.indexOf(stage) + 1) * 10),
+    );
+    final remaining = nextAt.difference(DateTime.now());
+    transitionTimer = Timer(
+      remaining > Duration.zero ? remaining : const Duration(milliseconds: 1),
+      advance,
+    );
+  }
+
+  void advance() {
+    if (!mounted) return;
+    final actual = widget.order.stageAt(DateTime.now());
+    final next =
+        widget.order.stages.indexOf(actual) > widget.order.stages.indexOf(stage)
+        ? actual
+        : widget.order.stages[widget.order.stages.indexOf(stage) + 1];
+    setState(() => stage = next);
+    if (stage != widget.order.stages.last) {
+      transitionTimer = Timer(const Duration(seconds: 10), advance);
+    }
+  }
+
+  @override
+  void dispose() {
+    transitionTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final motion = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 320);
+    if (widget.compact) {
+      return Semantics(
+        label: 'Estimated order status: ${stage.label}',
+        child: AnimatedSwitcher(
+          duration: motion,
+          child: Container(
+            key: ValueKey(stage),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: stage == widget.order.stages.last
+                  ? AppColors.softTeal
+                  : AppColors.softCoral,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              stage.label,
+              key: Key('order-stage-${widget.order.reference}'),
+              style: const TextStyle(
+                color: AppColors.ink,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      key: const Key('order-tracking'),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Order tracking',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: AppColors.dark,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Estimated progress · updates every 10 seconds',
+            style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
+          ),
+          const SizedBox(height: 18),
+          Semantics(
+            liveRegion: true,
+            child: AnimatedSwitcher(
+              duration: motion,
+              child: Text(
+                stage.message,
+                key: Key('order-stage-${stage.name}'),
+                style: const TextStyle(
+                  color: AppColors.ink,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          for (final step in widget.order.stages) ...[
+            Row(
+              children: [
+                AnimatedContainer(
+                  duration: motion,
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color:
+                        widget.order.stages.indexOf(step) <=
+                            widget.order.stages.indexOf(stage)
+                        ? AppColors.teal
+                        : AppColors.softTeal,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    widget.order.stages.indexOf(step) <
+                            widget.order.stages.indexOf(stage)
+                        ? Icons.check_rounded
+                        : switch (step) {
+                            OrderStage.confirmed => Icons.receipt_long_outlined,
+                            OrderStage.preparing => Icons.restaurant_outlined,
+                            OrderStage.riderAssigned =>
+                              Icons.delivery_dining_outlined,
+                            OrderStage.onTheWay => Icons.route_outlined,
+                            OrderStage.delivered =>
+                              Icons.local_shipping_outlined,
+                            OrderStage.readyForPickup =>
+                              Icons.storefront_outlined,
+                          },
+                    size: 16,
+                    color:
+                        widget.order.stages.indexOf(step) <=
+                            widget.order.stages.indexOf(stage)
+                        ? AppColors.white
+                        : AppColors.secondaryText,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    step.label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: step == stage
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                      color:
+                          widget.order.stages.indexOf(step) <=
+                              widget.order.stages.indexOf(stage)
+                          ? AppColors.ink
+                          : AppColors.secondaryText,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (step != widget.order.stages.last)
+              Padding(
+                padding: const EdgeInsets.only(left: 14),
+                child: AnimatedContainer(
+                  duration: motion,
+                  width: 2,
+                  height: 16,
+                  color:
+                      widget.order.stages.indexOf(step) <
+                          widget.order.stages.indexOf(stage)
+                      ? AppColors.teal
+                      : AppColors.border,
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class OrderConfirmationScreen extends StatelessWidget {
   const OrderConfirmationScreen({
     super.key,
@@ -4921,7 +5461,7 @@ class OrderConfirmationScreen extends StatelessWidget {
                 Semantics(
                   liveRegion: true,
                   child: Text(
-                    'Order confirmed.',
+                    'Order placed.',
                     style: displayStyle(32),
                     textAlign: TextAlign.center,
                   ),
@@ -4937,6 +5477,8 @@ class OrderConfirmationScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 28),
+                OrderTracking(order: order),
+                const SizedBox(height: 20),
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -4960,7 +5502,7 @@ class OrderConfirmationScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'} · Pickup order',
+                        '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'} · ${order.fulfillment == FulfillmentMethod.delivery ? 'Delivery' : 'Pickup'} order',
                         style: const TextStyle(
                           color: AppColors.secondaryText,
                           fontSize: 12,
@@ -4968,12 +5510,24 @@ class OrderConfirmationScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Pickup for ${order.customerName}',
+                        '${order.fulfillment == FulfillmentMethod.delivery ? 'Delivery' : 'Pickup'} for ${order.customerName}',
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                       if (order.mobileNumber.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(order.mobileNumber),
+                      ],
+                      if (order.deliveryAddress.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Delivery address',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(order.deliveryAddress),
                       ],
                       if (order.notes.isNotEmpty) ...[
                         const SizedBox(height: 4),
@@ -4982,7 +5536,7 @@ class OrderConfirmationScreen extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         order.paymentMethod == PaymentMethod.cash
-                            ? 'Cash at pickup · ${order.paymentStatus}'
+                            ? '${order.fulfillment == FulfillmentMethod.delivery ? 'Cash on delivery' : 'Cash at pickup'} · ${order.paymentStatus}'
                             : 'GCash · ${order.paymentStatus}',
                         key: const Key('confirmation-payment'),
                         style: const TextStyle(
