@@ -25,7 +25,12 @@ void main() {
       await tester.scrollUntilVisible(
         product,
         200,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: find
+            .descendant(
+              of: find.byType(CustomScrollView).first,
+              matching: find.byType(Scrollable),
+            )
+            .first,
       );
       await tester.pumpAndSettle();
       await tester.tap(product);
@@ -74,7 +79,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(OrderConfirmationScreen), findsOneWidget);
       expect(find.byType(CartScreen, skipOffstage: false), findsNothing);
-      expect(find.text('Demo order confirmed.'), findsOneWidget);
+      expect(find.text('Order confirmed.'), findsOneWidget);
       expect(find.text('Pickup for Juan Dela Cruz'), findsOneWidget);
       expect(
         find.text('Cash at pickup · Payment due at pickup'),

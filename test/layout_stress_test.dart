@@ -122,4 +122,40 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('GCash payment demo stays usable on a narrow phone', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.theme,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: const DemoPaymentScreen(
+          amount: 12345,
+          checkoutMobile: '09171234567',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('pay-with-gcash')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const Key('simulate-payment-failure')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('retry-payment')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -187,7 +187,7 @@ void main() {
         paymentMethod: PaymentMethod.digital,
       );
       expect(next?.reference, 'SMC-0002');
-      expect(next?.paymentStatus, 'Demo payment completed');
+      expect(next?.paymentStatus, 'Payment step complete');
       expect(restored.orders.map((order) => order.reference), [
         'SMC-0002',
         'SMC-0001',

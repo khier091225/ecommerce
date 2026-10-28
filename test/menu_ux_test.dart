@@ -31,12 +31,19 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> tapCategory(WidgetTester tester, String category) async {
+    final tab = find.byKey(Key('category-$category'));
+    await tester.ensureVisible(tab);
+    await tester.pumpAndSettle();
+    await tester.tap(tab);
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('Visible categories and empty search recovery keep the query', (
     tester,
   ) async {
     await openMenu(tester);
-    await tester.tap(find.byKey(const Key('category-Food')));
-    await tester.pumpAndSettle();
+    await tapCategory(tester, 'Food');
     await tester.enterText(
       find.byKey(const Key('menu-search')),
       'tiramisu latte',
@@ -69,11 +76,11 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byKey(const Key('category-More Drinks')).hitTestable(),
+        find.byKey(const Key('category-filters')).hitTestable(),
         findsOneWidget,
       );
       final scroll = tester
-          .widget<CustomScrollView>(find.byType(CustomScrollView))
+          .widget<CustomScrollView>(find.byType(CustomScrollView).first)
           .controller!;
       final position = scroll.offset;
       expect(position, greaterThan(200));
@@ -83,7 +90,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester
-            .widget<CustomScrollView>(find.byType(CustomScrollView))
+            .widget<CustomScrollView>(find.byType(CustomScrollView).first)
             .controller!
             .offset,
         closeTo(position, 1),
@@ -92,33 +99,30 @@ void main() {
     },
   );
 
-  testWidgets('All categories are reachable without navigation buttons', (
-    tester,
-  ) async {
-    await openMenu(tester);
-    expect(find.byTooltip('Previous categories'), findsNothing);
-    expect(find.byTooltip('Next categories'), findsNothing);
-    for (final category in ShopController.categories) {
+  testWidgets(
+    'Horizontal category rail reaches every category without arrows',
+    (tester) async {
+      await openMenu(tester);
+      expect(find.byTooltip('Previous categories'), findsNothing);
+      expect(find.byTooltip('Next categories'), findsNothing);
+      for (final category in ShopController.categories) {
+        expect(find.byKey(Key('category-$category')), findsOneWidget);
+      }
+      await tapCategory(tester, 'More Drinks');
+      final last = find.byKey(const Key('category-More Drinks'));
+      expect(last.hitTestable(), findsOneWidget);
+      expect(shop.category, 'More Drinks');
+      expect(shop.filteredProducts, hasLength(10));
       expect(
-        find.byKey(Key('category-$category')).hitTestable(),
-        findsOneWidget,
+        shop.filteredProducts.every((p) => p.category == 'More Drinks'),
+        isTrue,
       );
-    }
-    final last = find.byKey(const Key('category-More Drinks'));
-    await tester.tap(last);
-    await tester.pumpAndSettle();
-    expect(shop.category, 'More Drinks');
-    expect(shop.filteredProducts, hasLength(10));
-    expect(
-      shop.filteredProducts.every((p) => p.category == 'More Drinks'),
-      isTrue,
-    );
-    await tester.tap(last);
-    await tester.pumpAndSettle();
-    expect(shop.category, 'All');
-    expect(shop.filteredProducts, hasLength(92));
-    expect(tester.takeException(), isNull);
-  });
+      await tapCategory(tester, 'More Drinks');
+      expect(shop.category, 'All');
+      expect(shop.filteredProducts, hasLength(92));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'Reset clears search category and sorting while retaining the bag and favorites',
@@ -145,9 +149,10 @@ void main() {
       );
       expect(
         tester
-            .widget<ChoiceChip>(find.byKey(const Key('category-All')))
-            .selected,
-        isTrue,
+            .widget<TabBar>(find.byKey(const Key('category-filters')))
+            .controller!
+            .index,
+        0,
       );
       expect(find.byKey(const Key('reset-menu-filters')), findsNothing);
       expect(shop.cartCount, 1);
@@ -184,7 +189,12 @@ void main() {
     await tester.scrollUntilVisible(
       add,
       200,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: find
+          .descendant(
+            of: find.byType(CustomScrollView).first,
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
     await tester.pumpAndSettle();
     await tester.tap(add);

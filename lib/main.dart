@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
@@ -271,7 +272,7 @@ class OrderReceipt {
   final DateTime createdAt;
   String get paymentStatus => paymentMethod == PaymentMethod.cash
       ? 'Payment due at pickup'
-      : 'Demo payment completed';
+      : 'Payment step complete';
   int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
   int get total => items.fold(0, (sum, item) => sum + item.total);
 
@@ -1313,10 +1314,12 @@ class ShopController extends ChangeNotifier {
       _category != 'All' ||
       _sort != MenuSort.recommended;
   List<Product> get products => repository.products;
-  List<Product> get filteredProducts {
+  List<Product> get filteredProducts => productsForCategory(_category);
+
+  // Read-only projection for adjacent swipe pages; filtering rules stay shared.
+  List<Product> productsForCategory(String category) {
     final matches = products.where((product) {
-      final matchesCategory =
-          _category == 'All' || product.category == _category;
+      final matchesCategory = category == 'All' || product.category == category;
       return matchesCategory && _matchesQuery(product);
     }).toList();
     switch (_sort) {
@@ -1957,7 +1960,7 @@ class _StartScreenState extends State<StartScreen>
                                       onPressed: _leaving ? null : _openMenu,
                                       iconAlignment: IconAlignment.end,
                                       icon: const Icon(Icons.arrow_forward),
-                                      label: const Text('SHOP NOW'),
+                                      label: const Text('ORDER NOW'),
                                       style: FilledButton.styleFrom(
                                         minimumSize: const Size(48, 56),
                                       ),
@@ -2054,33 +2057,64 @@ class MenuScreen extends StatefulWidget {
   State<MenuScreen> createState() => _MenuScreenState();
 }
 
-class _MenuScreenState extends State<MenuScreen>
-    with SingleTickerProviderStateMixin {
+class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
   int tab = 0;
   final search = TextEditingController();
   final scrolls = List.generate(3, (_) => ScrollController());
+  final categoryScrolls = List.generate(
+    ShopController.categories.length,
+    (_) => ScrollController(),
+  );
   final featuredPages = PageController(viewportFraction: .9);
-  late final AnimationController filterMotion;
+  late TabController categoryTabs;
+  bool? reducedCategoryMotion;
   int featuredIndex = 0;
-  double slideDirection = 1;
   ShopController get shop => widget.controller;
 
   @override
   void initState() {
     super.initState();
     search.text = shop.query;
-    filterMotion = AnimationController(
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduced = MediaQuery.disableAnimationsOf(context);
+    if (reducedCategoryMotion == reduced) return;
+    final previousIndex = reducedCategoryMotion == null
+        ? ShopController.categories.indexOf(shop.category)
+        : categoryTabs.index;
+    if (reducedCategoryMotion != null) {
+      categoryTabs.removeListener(onCategoryPageChanged);
+      categoryTabs.dispose();
+    }
+    categoryTabs = TabController(
+      length: ShopController.categories.length,
+      initialIndex: previousIndex,
+      animationDuration: reduced
+          ? Duration.zero
+          : const Duration(milliseconds: 320),
       vsync: this,
-      duration: const Duration(milliseconds: 340),
-    )..value = 1;
+    );
+    categoryTabs.addListener(onCategoryPageChanged);
+    if (reducedCategoryMotion == null) shop.addListener(syncCategoryTabs);
+    reducedCategoryMotion = reduced;
   }
 
   @override
   void dispose() {
     search.dispose();
-    filterMotion.dispose();
+    if (reducedCategoryMotion != null) {
+      shop.removeListener(syncCategoryTabs);
+      categoryTabs.removeListener(onCategoryPageChanged);
+      categoryTabs.dispose();
+    }
     featuredPages.dispose();
     for (final scroll in scrolls) {
+      scroll.dispose();
+    }
+    for (final scroll in categoryScrolls) {
       scroll.dispose();
     }
     super.dispose();
@@ -2109,43 +2143,64 @@ class _MenuScreenState extends State<MenuScreen>
   }
 
   void resetPosition() {
-    if (scrolls[0].hasClients && scrolls[0].offset > 0) scrolls[0].jumpTo(0);
+    final scroll = categoryScrolls[categoryTabs.index];
+    if (scroll.hasClients && scroll.offset > 0) scroll.jumpTo(0);
+  }
+
+  void syncCategoryTabs() {
+    final index = ShopController.categories.indexOf(shop.category);
+    if (!mounted || index < 0 || categoryTabs.index == index) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      categoryTabs.index = index;
+    } else {
+      categoryTabs.animateTo(index);
+    }
+  }
+
+  void onCategoryPageChanged() {
+    if (categoryTabs.indexIsChanging) return;
+    // Let TabBar.onTap finish first when a zero-duration accessibility change
+    // notifies listeners synchronously; swipes still commit on settle.
+    scheduleMicrotask(() {
+      if (!mounted) return;
+      final category = ShopController.categories[categoryTabs.index];
+      if (shop.category != category) shop.selectCategory(category);
+    });
   }
 
   void selectCategory(String category) {
+    if (!ShopController.categories.contains(category)) return;
+    final target = category == shop.category && category != 'All'
+        ? 'All'
+        : category;
     FocusManager.instance.primaryFocus?.unfocus();
-    slideDirection =
-        ShopController.categories.indexOf(category) >=
-            ShopController.categories.indexOf(shop.category)
-        ? 1
-        : -1;
-    shop.selectCategory(category);
-    animateFilters();
-    resetPosition();
+    final index = ShopController.categories.indexOf(target);
+    if (MediaQuery.disableAnimationsOf(context)) {
+      categoryTabs.index = index;
+    } else {
+      categoryTabs.animateTo(
+        index,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (shop.category != target) shop.selectCategory(target);
   }
 
   void queryChanged(String query) {
     shop.search(query);
-    slideDirection = 1;
-    animateFilters(quick: true);
     resetPosition();
-  }
-
-  void animateFilters({bool quick = false}) {
-    filterMotion.duration = Duration(milliseconds: quick ? 170 : 340);
-    if (MediaQuery.disableAnimationsOf(context)) {
-      filterMotion.value = 1;
-    } else {
-      filterMotion.forward(from: 0);
-    }
   }
 
   void resetFilters() {
     FocusManager.instance.primaryFocus?.unfocus();
     search.clear();
     shop.resetFilters();
-    slideDirection = -1;
-    animateFilters();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      categoryTabs.index = 0;
+    } else {
+      categoryTabs.animateTo(0);
+    }
     resetPosition();
   }
 
@@ -2268,320 +2323,470 @@ class _MenuScreenState extends State<MenuScreen>
                         ),
                     ],
                   ),
-            body: CustomScrollView(
-              key: PageStorageKey('menu-tab-$tab'),
-              controller: scrolls[tab],
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              slivers: [
-                SliverToBoxAdapter(
-                  child: ContentWidth(
-                    padding: EdgeInsets.symmetric(horizontal: padding),
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 24, bottom: 14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (tab == 0) ...[
-                            const Eyebrow('Smooch Cafe · Carmona'),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Made for your cravings.',
-                              style: displayStyle(wide ? 38 : 29),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Your favorite sip. Your next little treat.',
-                              style: TextStyle(
-                                color: AppColors.secondaryText,
-                                fontSize: 14,
-                                height: 1.5,
-                              ),
-                            ),
-                          ] else if (tab == 1) ...[
-                            const Eyebrow('Saved with love'),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Your happy little list.',
-                              style: displayStyle(32),
-                            ),
-                            const SizedBox(height: 10),
-                            const Text(
-                              'All the things you’ll want to come back for.',
-                              style: TextStyle(
-                                color: AppColors.secondaryText,
-                                fontSize: 14,
-                                height: 1.6,
-                              ),
-                            ),
-                          ] else
-                            CafeSection(onBrowse: () => selectTab(0)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                if (tab == 0)
-                  PinnedHeaderSliver(
-                    child: Material(
-                      color: AppColors.canvas,
-                      child: MenuFilters(
-                        controller: shop,
-                        search: search,
-                        onQuery: queryChanged,
-                        onCategory: selectCategory,
-                        horizontalPadding: padding,
-                        searchHeight: searchHeight,
-                      ),
-                    ),
-                  ),
-                if (tab == 0 &&
-                    shop.category == 'All' &&
-                    shop.query.trim().isEmpty)
-                  SliverToBoxAdapter(
-                    child: _FeaturedCarousel(
-                      controller: shop,
-                      pages: featuredPages,
-                      currentPage: featuredIndex,
-                      onPageChanged: (value) =>
-                          setState(() => featuredIndex = value),
-                    ),
-                  ),
-                if (tab != 2) ...[
-                  SliverToBoxAdapter(
-                    child: ContentWidth(
-                      padding: EdgeInsets.symmetric(horizontal: padding),
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 14, bottom: 16),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    tab == 1
-                                        ? 'Your favorites'
-                                        : shop.query.trim().isNotEmpty
-                                        ? 'Search results'
-                                        : shop.category == 'All'
-                                        ? 'Explore the menu'
-                                        : shop.category,
-                                    style: const TextStyle(
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${items.length} ${items.length == 1 ? 'item' : 'items'}${shop.query.trim().isNotEmpty && tab == 0 ? ' for “${shop.query.trim()}”' : ''}',
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: AppColors.secondaryText,
-                                      fontSize: 12,
-                                      height: 1.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (tab == 0 && shop.hasActiveFilters) ...[
-                              Tooltip(
-                                message: 'Reset filters',
-                                child: TextButton(
-                                  key: const Key('reset-menu-filters'),
-                                  onPressed: resetFilters,
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: AppColors.teal,
-                                    minimumSize: const Size(48, 48),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'Reset',
-                                    style: TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                            ],
-                            if (tab == 0)
-                              PopupMenuButton<MenuSort>(
-                                tooltip: 'Sort menu',
-                                initialValue: shop.sort,
-                                onSelected: (value) {
-                                  shop.sortBy(value);
-                                  slideDirection = 1;
-                                  animateFilters();
-                                  resetPosition();
-                                },
-                                itemBuilder: (_) => [
-                                  for (final sort in MenuSort.values)
-                                    CheckedPopupMenuItem(
-                                      value: sort,
-                                      checked: shop.sort == sort,
-                                      child: Text(sort.label),
-                                    ),
-                                ],
-                                child: Container(
-                                  constraints: const BoxConstraints(
-                                    minHeight: 48,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surface,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: AppColors.border),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.swap_vert, size: 18),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        wide
-                                            ? shop.sort.label
-                                            : switch (shop.sort) {
-                                                MenuSort.recommended => 'Sort',
-                                                MenuSort.priceLow => 'Price ↑',
-                                                MenuSort.priceHigh => 'Price ↓',
-                                                MenuSort.name => 'A–Z',
-                                              },
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                          ],
+            body: tab == 0
+                ? Column(
+                    children: [
+                      Material(
+                        color: AppColors.canvas,
+                        child: MenuFilters(
+                          controller: shop,
+                          search: search,
+                          onQuery: queryChanged,
+                          onCategory: selectCategory,
+                          tabs: categoryTabs,
+                          horizontalPadding: padding,
+                          searchHeight: searchHeight,
                         ),
                       ),
-                    ),
-                  ),
-                  if (items.isEmpty)
-                    SliverToBoxAdapter(
-                      child: EmptyState(
-                        icon: tab == 1
-                            ? Icons.favorite_border
-                            : Icons.search_off,
-                        title: tab == 1
-                            ? 'Make room for favorites.'
-                            : 'No matches found.',
-                        message: tab == 1
-                            ? 'Tap the heart on a menu item to save it here.'
-                            : shop.category == 'All'
-                            ? 'Try another name or clear your search.'
-                            : 'Nothing matched in ${shop.category}. Try searching all categories.',
-                        action: OutlinedButton(
-                          onPressed: () {
-                            if (tab == 1) {
-                              selectTab(0);
-                            } else if (shop.category != 'All') {
-                              selectCategory('All');
-                            } else {
-                              search.clear();
-                              queryChanged('');
-                            }
-                          },
-                          child: Text(
-                            tab == 1
-                                ? 'Browse the menu'
-                                : shop.category != 'All'
-                                ? 'Search all categories'
-                                : 'Clear search',
+                      Expanded(
+                        child: ScrollConfiguration(
+                          behavior: ScrollConfiguration.of(context).copyWith(
+                            dragDevices: {
+                              PointerDeviceKind.touch,
+                              PointerDeviceKind.mouse,
+                              PointerDeviceKind.trackpad,
+                              PointerDeviceKind.stylus,
+                            },
+                          ),
+                          child: TabBarView(
+                            key: const Key('menu-category-pages'),
+                            controller: categoryTabs,
+                            physics: const PageScrollPhysics(),
+                            children: [
+                              for (
+                                var index = 0;
+                                index < ShopController.categories.length;
+                                index++
+                              )
+                                _MenuCategoryPage(
+                                  key: PageStorageKey(
+                                    'menu-category-${ShopController.categories[index]}',
+                                  ),
+                                  category: ShopController.categories[index],
+                                  products: shop.productsForCategory(
+                                    ShopController.categories[index],
+                                  ),
+                                  controller: shop,
+                                  scroll: categoryScrolls[index],
+                                  width: constraints.maxWidth,
+                                  horizontalPadding: padding,
+                                  wide: wide,
+                                  featuredPages: featuredPages,
+                                  featuredIndex: featuredIndex,
+                                  onFeaturedPageChanged: (value) =>
+                                      setState(() => featuredIndex = value),
+                                  onReset: resetFilters,
+                                  onSort: (value) {
+                                    shop.sortBy(value);
+                                    resetPosition();
+                                  },
+                                  onSearchAll: () => selectCategory('All'),
+                                  onClearSearch: () {
+                                    search.clear();
+                                    queryChanged('');
+                                  },
+                                ),
+                            ],
                           ),
                         ),
                       ),
-                    )
-                  else
-                    SliverPadding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal:
-                            math.max(0, (constraints.maxWidth - 1160) / 2) +
-                            padding,
-                      ),
-                      sliver: SliverLayoutBuilder(
-                        builder: (context, gridConstraints) {
-                          final width = gridConstraints.crossAxisExtent;
-                          final columns = scale > 1.3
-                              ? math
-                                    .max(1, (width / (240 * scale)).floor())
-                                    .clamp(1, 4)
-                              : width >= 1040
-                              ? 5
-                              : width >= 900
-                              ? 4
-                              : width >= 700
-                              ? 3
-                              : width >= 300
-                              ? 2
-                              : 1;
-                          final cardWidth =
-                              (width - 12 * (columns - 1)) / columns;
-                          return SliverGrid.builder(
-                            itemCount: items.length,
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: columns,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 14,
-                                  mainAxisExtent:
-                                      math.min(cardWidth * .76, 176) +
-                                      144 * scale,
-                                ),
-                            itemBuilder: (_, index) => FadeTransition(
-                              key: Key('filter-motion-${items[index].id}'),
-                              opacity: filterMotion,
-                              child: SlideTransition(
-                                position:
-                                    Tween<Offset>(
-                                      begin: Offset(.10 * slideDirection, 0),
-                                      end: Offset.zero,
-                                    ).animate(
-                                      CurvedAnimation(
-                                        parent: filterMotion,
-                                        curve: Curves.easeOutCubic,
-                                      ),
+                    ],
+                  )
+                : CustomScrollView(
+                    key: PageStorageKey('menu-tab-$tab'),
+                    controller: scrolls[tab],
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: ContentWidth(
+                          padding: EdgeInsets.symmetric(horizontal: padding),
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 24, bottom: 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (tab == 1) ...[
+                                  const Eyebrow('Saved with love'),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    'Your happy little list.',
+                                    style: displayStyle(32),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  const Text(
+                                    'All the things you’ll want to come back for.',
+                                    style: TextStyle(
+                                      color: AppColors.secondaryText,
+                                      fontSize: 14,
+                                      height: 1.6,
                                     ),
-                                child: ProductCard(
-                                  product: items[index],
-                                  controller: shop,
-                                ),
-                              ),
+                                  ),
+                                ] else
+                                  CafeSection(onBrowse: () => selectTab(0)),
+                              ],
                             ),
-                          );
-                        },
-                      ),
-                    ),
-                ],
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                    child: Center(
-                      child: Text(
-                        'A little Smooch goes a long way.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppColors.secondaryText,
-                          fontSize: 12,
+                          ),
                         ),
                       ),
-                    ),
+                      if (tab != 2) ...[
+                        SliverToBoxAdapter(
+                          child: ContentWidth(
+                            padding: EdgeInsets.symmetric(horizontal: padding),
+                            child: Padding(
+                              padding: const EdgeInsets.only(
+                                top: 14,
+                                bottom: 16,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Your favorites',
+                                          style: TextStyle(
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '${items.length} ${items.length == 1 ? 'item' : 'items'}',
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: AppColors.secondaryText,
+                                            fontSize: 12,
+                                            height: 1.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (items.isEmpty)
+                          SliverToBoxAdapter(
+                            child: EmptyState(
+                              icon: Icons.favorite_border,
+                              title: 'Make room for favorites.',
+                              message: 'Tap the heart on a menu item to save it here.',
+                              action: OutlinedButton(
+                                onPressed: () => selectTab(0),
+                                child: const Text('Browse the menu'),
+                              ),
+                            ),
+                          )
+                        else
+                          _ProductGridSliver(
+                            products: items,
+                            controller: shop,
+                            width: constraints.maxWidth,
+                            horizontalPadding: padding,
+                          ),
+                      ],
+                      const SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 32,
+                          ),
+                          child: Center(
+                            child: Text(
+                              'A little Smooch goes a long way.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: AppColors.secondaryText,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           );
         },
       );
     },
   );
+}
+
+class _MenuCategoryPage extends StatelessWidget {
+  const _MenuCategoryPage({
+    super.key,
+    required this.category,
+    required this.products,
+    required this.controller,
+    required this.scroll,
+    required this.width,
+    required this.horizontalPadding,
+    required this.wide,
+    required this.featuredPages,
+    required this.featuredIndex,
+    required this.onFeaturedPageChanged,
+    required this.onReset,
+    required this.onSort,
+    required this.onSearchAll,
+    required this.onClearSearch,
+  });
+
+  final String category;
+  final List<Product> products;
+  final ShopController controller;
+  final ScrollController scroll;
+  final double width;
+  final double horizontalPadding;
+  final bool wide;
+  final PageController featuredPages;
+  final int featuredIndex;
+  final ValueChanged<int> onFeaturedPageChanged;
+  final VoidCallback onReset;
+  final ValueChanged<MenuSort> onSort;
+  final VoidCallback onSearchAll;
+  final VoidCallback onClearSearch;
+
+  @override
+  Widget build(BuildContext context) {
+    final showFeatured = category == 'All' && controller.query.trim().isEmpty;
+    return CustomScrollView(
+      key: PageStorageKey('products-$category'),
+      controller: scroll,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      slivers: [
+        if (showFeatured) ...[
+          SliverToBoxAdapter(
+            child: ContentWidth(
+              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 20, bottom: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Eyebrow('Smooch Cafe · Carmona'),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Made for your cravings.',
+                      style: displayStyle(wide ? 38 : 29),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Your favorite sip. Your next little treat.',
+                      style: TextStyle(
+                        color: AppColors.secondaryText,
+                        fontSize: 14,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: _FeaturedCarousel(
+              controller: controller,
+              pages: featuredPages,
+              currentPage: featuredIndex,
+              onPageChanged: onFeaturedPageChanged,
+            ),
+          ),
+        ],
+        SliverToBoxAdapter(
+          child: ContentWidth(
+            padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 14, bottom: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          controller.query.trim().isNotEmpty
+                              ? 'Search results'
+                              : category == 'All'
+                              ? 'Explore the menu'
+                              : category,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${products.length} ${products.length == 1 ? 'item' : 'items'}${controller.query.trim().isNotEmpty ? ' for “${controller.query.trim()}”' : ''}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.secondaryText,
+                            fontSize: 12,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (controller.hasActiveFilters) ...[
+                    TextButton(
+                      key: const Key('reset-menu-filters'),
+                      onPressed: onReset,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.teal,
+                        minimumSize: const Size(48, 48),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                      child: const Text(
+                        'Reset',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  PopupMenuButton<MenuSort>(
+                    tooltip: 'Sort menu',
+                    initialValue: controller.sort,
+                    onSelected: onSort,
+                    itemBuilder: (_) => [
+                      for (final sort in MenuSort.values)
+                        CheckedPopupMenuItem(
+                          value: sort,
+                          checked: controller.sort == sort,
+                          child: Text(sort.label),
+                        ),
+                    ],
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 48),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.swap_vert, size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            wide
+                                ? controller.sort.label
+                                : switch (controller.sort) {
+                                    MenuSort.recommended => 'Sort',
+                                    MenuSort.priceLow => 'Price ↑',
+                                    MenuSort.priceHigh => 'Price ↓',
+                                    MenuSort.name => 'A–Z',
+                                  },
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (products.isEmpty)
+          SliverToBoxAdapter(
+            child: EmptyState(
+              icon: Icons.search_off,
+              title: 'No matches found.',
+              message: category == 'All'
+                  ? 'Try another name or clear your search.'
+                  : 'Nothing matched in $category. Try searching all categories.',
+              action: OutlinedButton(
+                onPressed: category == 'All' ? onClearSearch : onSearchAll,
+                child: Text(
+                  category == 'All' ? 'Clear search' : 'Search all categories',
+                ),
+              ),
+            ),
+          )
+        else
+          _ProductGridSliver(
+            products: products,
+            controller: controller,
+            width: width,
+            horizontalPadding: horizontalPadding,
+          ),
+        const SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: Center(
+              child: Text(
+                'A little Smooch goes a long way.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.secondaryText, fontSize: 12),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProductGridSliver extends StatelessWidget {
+  const _ProductGridSliver({
+    required this.products,
+    required this.controller,
+    required this.width,
+    required this.horizontalPadding,
+  });
+  final List<Product> products;
+  final ShopController controller;
+  final double width;
+  final double horizontalPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    return SliverPadding(
+      padding: EdgeInsets.symmetric(
+        horizontal: math.max(0, (width - 1160) / 2) + horizontalPadding,
+      ),
+      sliver: SliverLayoutBuilder(
+        builder: (context, gridConstraints) {
+          final gridWidth = gridConstraints.crossAxisExtent;
+          final columns = scale > 1.3
+              ? math.max(1, (gridWidth / (240 * scale)).floor()).clamp(1, 4)
+              : gridWidth >= 1040
+              ? 5
+              : gridWidth >= 900
+              ? 4
+              : gridWidth >= 700
+              ? 3
+              : gridWidth >= 300
+              ? 2
+              : 1;
+          final cardWidth = (gridWidth - 12 * (columns - 1)) / columns;
+          return SliverGrid.builder(
+            itemCount: products.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 14,
+              mainAxisExtent: math.min(cardWidth * .76, 176) + 144 * scale,
+            ),
+            itemBuilder: (_, index) =>
+                ProductCard(product: products[index], controller: controller),
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _FeaturedCarousel extends StatelessWidget {
@@ -2838,6 +3043,7 @@ class MenuFilters extends StatelessWidget {
     required this.search,
     required this.onQuery,
     required this.onCategory,
+    required this.tabs,
     required this.horizontalPadding,
     required this.searchHeight,
   });
@@ -2846,6 +3052,7 @@ class MenuFilters extends StatelessWidget {
   final TextEditingController search;
   final ValueChanged<String> onQuery;
   final ValueChanged<String> onCategory;
+  final TabController tabs;
   final double horizontalPadding;
   final double searchHeight;
 
@@ -2888,42 +3095,43 @@ class MenuFilters extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Wrap(
-            key: const Key('category-filters'),
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              for (final category in ShopController.categories)
-                ChoiceChip(
-                  key: Key('category-$category'),
-                  label: Text(category),
-                  selected: controller.category == category,
-                  onSelected: (selected) =>
-                      onCategory(selected ? category : 'All'),
-                  showCheckmark: false,
-                  selectedColor: AppColors.dark,
-                  backgroundColor: AppColors.surface,
-                  side: BorderSide(
-                    color: controller.category == category
-                        ? AppColors.dark
-                        : AppColors.border,
-                  ),
-                  labelStyle: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: controller.category == category
-                        ? AppColors.white
-                        : AppColors.ink,
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-            ],
+          ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              dragDevices: {
+                PointerDeviceKind.touch,
+                PointerDeviceKind.mouse,
+                PointerDeviceKind.trackpad,
+                PointerDeviceKind.stylus,
+              },
+            ),
+            child: TabBar(
+              key: const Key('category-filters'),
+              controller: tabs,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              indicatorColor: AppColors.teal,
+              indicatorWeight: 3,
+              indicatorSize: TabBarIndicatorSize.label,
+              dividerColor: AppColors.border,
+              labelColor: AppColors.dark,
+              unselectedLabelColor: AppColors.secondaryText,
+              labelStyle: const TextStyle(
+                fontFamily: 'Montserrat',
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontFamily: 'Montserrat',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+              labelPadding: const EdgeInsets.symmetric(horizontal: 17),
+              onTap: (index) => onCategory(ShopController.categories[index]),
+              tabs: [
+                for (final category in ShopController.categories)
+                  Tab(key: Key('category-$category'), text: category),
+              ],
+            ),
           ),
         ],
       ),
@@ -3460,7 +3668,7 @@ class _CartScreenState extends State<CartScreen> {
                         const Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            'Pickup demo. No order is sent to the cafe.',
+                            'No order is sent to the cafe.',
                             style: TextStyle(
                               color: AppColors.secondaryText,
                               fontSize: 12,
@@ -3609,7 +3817,7 @@ class OrderHistoryScreen extends StatelessWidget {
                 child: EmptyState(
                   icon: Icons.receipt_long_outlined,
                   title: 'No orders yet.',
-                  message: 'Your completed demo orders will appear here.',
+                  message: 'Your saved orders will appear here.',
                   action: FilledButton(
                     onPressed: () => Navigator.pop(context),
                     child: const Text('Browse the menu'),
@@ -3709,7 +3917,7 @@ class OrderHistoryScreen extends StatelessWidget {
 }
 
 // ============================================================
-// CHECKOUT AND DEMO PAYMENT
+// CHECKOUT AND GCASH-STYLE PAYMENT DEMO
 // ============================================================
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key, required this.controller});
@@ -3749,7 +3957,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     try {
       if (payment == PaymentMethod.digital) {
         final paid = await Navigator.of(context).push<bool>(
-          MaterialPageRoute(builder: (_) => const DemoPaymentScreen()),
+          MaterialPageRoute(
+            builder: (_) => DemoPaymentScreen(
+              amount: widget.controller.total,
+              checkoutMobile: mobile.text,
+            ),
+          ),
         );
         if (!mounted || paid != true) return;
       }
@@ -3862,8 +4075,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   const SizedBox(height: 10),
                   _PaymentChoice(
                     key: const Key('payment-digital'),
-                    title: 'Demo digital payment',
-                    subtitle: 'Simulate a payment; no money is taken',
+                    title: 'GCash',
+                    subtitle: 'Preview a wallet payment; no money is taken',
                     icon: Icons.account_balance_wallet_outlined,
                     selected: payment == PaymentMethod.digital,
                     onTap: () =>
@@ -3898,7 +4111,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                   const SizedBox(height: 14),
                   const Text(
-                    'Demo checkout only. The cafe will not receive this order.',
+                    'No order will be sent to the cafe, and no payment will be taken.',
                     style: TextStyle(
                       color: AppColors.secondaryText,
                       fontSize: 12,
@@ -3936,8 +4149,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   iconAlignment: IconAlignment.end,
                   label: Text(
                     payment == PaymentMethod.cash
-                        ? 'Place demo order'
-                        : 'Continue to demo payment',
+                        ? 'Place order'
+                        : 'Continue to GCash',
                   ),
                 ),
               ),
@@ -4015,84 +4228,520 @@ class _PaymentChoice extends StatelessWidget {
   );
 }
 
+abstract final class _WalletDemoColors {
+  static const blue = Color(0xFF0958D9);
+  static const deepBlue = Color(0xFF073DA7);
+  static const paleBlue = Color(0xFFF3F7FF);
+  static const text = Color(0xFF172B50);
+  static const muted = Color(0xFF65738D);
+}
+
+enum _DemoPaymentStage { review, processing, success, failed }
+
 class DemoPaymentScreen extends StatefulWidget {
-  const DemoPaymentScreen({super.key});
+  const DemoPaymentScreen({
+    super.key,
+    required this.amount,
+    required this.checkoutMobile,
+  });
+
+  final num amount;
+  final String checkoutMobile;
 
   @override
   State<DemoPaymentScreen> createState() => _DemoPaymentScreenState();
 }
 
 class _DemoPaymentScreenState extends State<DemoPaymentScreen> {
-  bool failed = false;
+  _DemoPaymentStage stage = _DemoPaymentStage.review;
 
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Demo payment', style: TextStyle(fontSize: 16)),
+  String get maskedMobile {
+    final digits = widget.checkoutMobile.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 4) return 'Checkout mobile';
+    return 'Checkout mobile ending ${digits.substring(digits.length - 4)}';
+  }
+
+  Future<void> pay() async {
+    if (stage != _DemoPaymentStage.review) return;
+    setState(() => stage = _DemoPaymentStage.processing);
+    await Future<void>.delayed(const Duration(milliseconds: 850));
+    if (mounted) setState(() => stage = _DemoPaymentStage.success);
+  }
+
+  Widget paymentRow(String label, String value, {bool total = false}) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: total
+                      ? _WalletDemoColors.text
+                      : _WalletDemoColors.muted,
+                  fontWeight: total ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                value,
+                textAlign: TextAlign.end,
+                style: TextStyle(
+                  color: _WalletDemoColors.text,
+                  fontWeight: total ? FontWeight.w800 : FontWeight.w600,
+                  fontSize: total ? 18 : 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget walletCard(Widget child) => Container(
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(22),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x14073DA7),
+          blurRadius: 26,
+          offset: Offset(0, 10),
+        ),
+      ],
     ),
-    body: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    child: child,
+  );
+
+  Widget reviewContent() => Column(
+    key: const ValueKey('payment-review'),
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      walletCard(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'PAY WITH',
+              style: TextStyle(
+                color: _WalletDemoColors.muted,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
               children: [
-                const Icon(
-                  Icons.account_balance_wallet_outlined,
-                  size: 72,
-                  color: AppColors.teal,
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Demo digital payment',
-                  textAlign: TextAlign.center,
-                  style: displayStyle(30),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Choose an outcome to preview the payment flow. No card, wallet, or real payment is used.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.secondaryText, height: 1.5),
-                ),
-                if (failed) ...[
-                  const SizedBox(height: 22),
-                  const Text(
-                    'Payment failed. Your bag is safe; try again or go back.',
-                    key: Key('payment-failure'),
-                    textAlign: TextAlign.center,
+                Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    color: _WalletDemoColors.blue,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text(
+                    'G',
                     style: TextStyle(
-                      color: AppColors.action,
-                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                ],
-                const SizedBox(height: 30),
-                FilledButton(
-                  key: const Key('simulate-payment-success'),
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Simulate successful payment'),
                 ),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  key: const Key('simulate-payment-failure'),
-                  onPressed: () => setState(() => failed = true),
-                  child: const Text('Simulate failed payment'),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'GCash wallet',
+                        style: TextStyle(
+                          color: _WalletDemoColors.text,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        maskedMobile,
+                        style: const TextStyle(
+                          color: _WalletDemoColors.muted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 12),
-                TextButton(
-                  key: const Key('cancel-payment'),
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel payment'),
+                const Icon(
+                  Icons.check_circle,
+                  color: _WalletDemoColors.blue,
+                  size: 22,
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+      walletCard(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'PAYMENT DETAILS',
+              style: TextStyle(
+                color: _WalletDemoColors.muted,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 13),
+            paymentRow('Merchant', 'Smooch Cafe'),
+            paymentRow('Amount', pesos(widget.amount)),
+            paymentRow('Service fee', pesos(0)),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Divider(height: 1),
+            ),
+            paymentRow('Total', pesos(widget.amount), total: true),
+          ],
+        ),
+      ),
+      const SizedBox(height: 18),
+      const _PaymentDemoNotice(),
+    ],
+  );
+
+  Widget resultContent() {
+    final success = stage == _DemoPaymentStage.success;
+    final processing = stage == _DemoPaymentStage.processing;
+    final icon = processing
+        ? null
+        : success
+        ? Icons.check_rounded
+        : Icons.close_rounded;
+    return Column(
+      key: ValueKey(stage),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        walletCard(
+          Column(
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: success
+                      ? const Color(0xFFE6F7F0)
+                      : processing
+                      ? _WalletDemoColors.paleBlue
+                      : const Color(0xFFFDEDEB),
+                  shape: BoxShape.circle,
+                ),
+                child: processing
+                    ? const SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: CircularProgressIndicator(
+                          color: _WalletDemoColors.blue,
+                          strokeWidth: 3,
+                        ),
+                      )
+                    : Icon(
+                        icon,
+                        color: success
+                            ? const Color(0xFF18835D)
+                            : AppColors.action,
+                        size: 40,
+                      ),
+              ),
+              const SizedBox(height: 20),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  processing
+                      ? 'Processing payment'
+                      : success
+                      ? 'Payment successful'
+                      : 'Payment failed',
+                  key: processing
+                      ? const Key('payment-processing')
+                      : success
+                      ? const Key('payment-success')
+                      : const Key('payment-failure'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: _WalletDemoColors.text,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                processing
+                    ? 'Please wait a moment.'
+                    : success
+                    ? 'Your Smooch Cafe order is ready to confirm.'
+                    : 'Your bag is safe. You can try again or return to checkout.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: _WalletDemoColors.muted,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 22),
+              const Divider(),
+              paymentRow(success ? 'Paid to' : 'Merchant', 'Smooch Cafe'),
+              paymentRow('Amount', pesos(widget.amount), total: true),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        const _PaymentDemoNotice(),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return Scaffold(
+      backgroundColor: _WalletDemoColors.paleBlue,
+      appBar: AppBar(
+        backgroundColor: _WalletDemoColors.deepBlue,
+        foregroundColor: Colors.white,
+        title: const Text(
+          'GCash',
+          style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
+        ),
+        actions: [
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .17),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'PREVIEW',
+                style: TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 1,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 20),
+        ],
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [_WalletDemoColors.deepBlue, _WalletDemoColors.blue],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          switch (stage) {
+                            _DemoPaymentStage.review => 'YOU ARE ABOUT TO PAY',
+                            _DemoPaymentStage.processing =>
+                              'PROCESSING PAYMENT',
+                            _DemoPaymentStage.success => 'PAYMENT COMPLETE',
+                            _DemoPaymentStage.failed => 'PAYMENT UNSUCCESSFUL',
+                          },
+                          style: const TextStyle(
+                            color: Color(0xFFD6E5FF),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            pesos(widget.amount),
+                            key: const Key('payment-amount'),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 36,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -.8,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        const Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 17,
+                              backgroundColor: Colors.white,
+                              child: Text(
+                                'SC',
+                                style: TextStyle(
+                                  color: _WalletDemoColors.deepBlue,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 10),
+                            Text(
+                              'Smooch Cafe',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+                  child: AnimatedSwitcher(
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: stage == _DemoPaymentStage.review
+                        ? reviewContent()
+                        : resultContent(),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: ColoredBox(
+        color: Colors.white,
+        child: SafeArea(
+          top: false,
+          child: Center(
+            heightFactor: 1,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FilledButton(
+                      key: Key(
+                        stage == _DemoPaymentStage.success
+                            ? 'continue-after-payment'
+                            : stage == _DemoPaymentStage.failed
+                            ? 'retry-payment'
+                            : 'pay-with-gcash',
+                      ),
+                      onPressed: switch (stage) {
+                        _DemoPaymentStage.review => pay,
+                        _DemoPaymentStage.processing => null,
+                        _DemoPaymentStage.success => () => Navigator.pop(
+                          context,
+                          true,
+                        ),
+                        _DemoPaymentStage.failed => () => setState(
+                          () => stage = _DemoPaymentStage.review,
+                        ),
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _WalletDemoColors.blue,
+                        minimumSize: const Size.fromHeight(52),
+                      ),
+                      child: Text(switch (stage) {
+                        _DemoPaymentStage.review =>
+                          'Pay ${pesos(widget.amount)}',
+                        _DemoPaymentStage.processing => 'Processing…',
+                        _DemoPaymentStage.success => 'Continue to order',
+                        _DemoPaymentStage.failed => 'Try again',
+                      }),
+                    ),
+                    if (stage == _DemoPaymentStage.review)
+                      TextButton(
+                        key: const Key('simulate-payment-failure'),
+                        onPressed: () =>
+                            setState(() => stage = _DemoPaymentStage.failed),
+                        style: TextButton.styleFrom(
+                          foregroundColor: _WalletDemoColors.blue,
+                          backgroundColor: Colors.transparent,
+                        ),
+                        child: const Text('Preview failed payment'),
+                      ),
+                    if (stage == _DemoPaymentStage.failed)
+                      TextButton(
+                        key: const Key('cancel-payment'),
+                        onPressed: () => Navigator.pop(context, false),
+                        style: TextButton.styleFrom(
+                          foregroundColor: _WalletDemoColors.blue,
+                          backgroundColor: Colors.transparent,
+                        ),
+                        child: const Text('Back to checkout'),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
       ),
-    ),
+    );
+  }
+}
+
+class _PaymentDemoNotice extends StatelessWidget {
+  const _PaymentDemoNotice();
+
+  @override
+  Widget build(BuildContext context) => const Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Icon(Icons.info_outline, color: _WalletDemoColors.blue, size: 18),
+      SizedBox(width: 9),
+      Expanded(
+        child: Text(
+          'Payment preview only. This is not connected to GCash and no money will be transferred.',
+          style: TextStyle(
+            color: _WalletDemoColors.muted,
+            fontSize: 11,
+            height: 1.5,
+          ),
+        ),
+      ),
+    ],
   );
 }
 
@@ -4157,7 +4806,7 @@ class OrderConfirmationScreen extends StatelessWidget {
                 Semantics(
                   liveRegion: true,
                   child: Text(
-                    'Demo order confirmed.',
+                    'Order confirmed.',
                     style: displayStyle(32),
                     textAlign: TextAlign.center,
                   ),
@@ -4196,7 +4845,7 @@ class OrderConfirmationScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'} · Demo order',
+                        '${order.itemCount} ${order.itemCount == 1 ? 'item' : 'items'} · Pickup order',
                         style: const TextStyle(
                           color: AppColors.secondaryText,
                           fontSize: 12,
@@ -4219,7 +4868,7 @@ class OrderConfirmationScreen extends StatelessWidget {
                       Text(
                         order.paymentMethod == PaymentMethod.cash
                             ? 'Cash at pickup · ${order.paymentStatus}'
-                            : 'Digital demo · ${order.paymentStatus}',
+                            : 'GCash · ${order.paymentStatus}',
                         key: const Key('confirmation-payment'),
                         style: const TextStyle(
                           color: AppColors.secondaryText,
@@ -4306,7 +4955,7 @@ class OrderConfirmationScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 const Text(
-                  'This is a demo confirmation. Nothing was sent to the cafe, and no payment was taken.',
+                  'Saved on this device only. Nothing was sent to the cafe, and no payment was taken.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12,

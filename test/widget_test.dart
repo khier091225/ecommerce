@@ -147,7 +147,12 @@ void main() {
     await tester.scrollUntilVisible(
       find.byTooltip('Save Tiramisu Latte'),
       200,
-      scrollable: find.byType(Scrollable).first,
+      scrollable: find
+          .descendant(
+            of: find.byType(CustomScrollView).first,
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
     await tester.ensureVisible(find.byTooltip('Save Tiramisu Latte'));
     await tester.pumpAndSettle();
@@ -245,7 +250,12 @@ void main() {
       await tester.scrollUntilVisible(
         add,
         200,
-        scrollable: find.byType(Scrollable).first,
+        scrollable: find
+            .descendant(
+              of: find.byType(CustomScrollView).first,
+              matching: find.byType(Scrollable),
+            )
+            .first,
       );
       await tester.pumpAndSettle();
       await tester.tap(add);

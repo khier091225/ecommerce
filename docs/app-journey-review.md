@@ -2,9 +2,9 @@
 
 ## Implementation update — 28 October 2026
 
-The findings below record the initial audit. The current app now follows `Start → Menu → Bag → Checkout → Cash at pickup or demo digital payment → Confirmation`, with required name/mobile validation and optional pickup notes. Failed or cancelled digital payment keeps the bag. A successful order is saved locally before the bag clears; confirmation shows customer details, payment status, items, and total. The order-history button in the menu reopens receipts after an app restart, and references continue in sequence. The two large-text overflows found in the bag and product details were fixed and verified with the bundled fonts. The menu also has a swipeable featured-products carousel and a short slide/fade animation when filtering.
+The findings below record the initial audit. The current app now follows `Start → Menu → Bag → Checkout → Cash at pickup or GCash-style payment preview → Confirmation`, with required name/mobile validation and optional pickup notes. The simulated wallet screen reviews the exact order amount, shows a masked checkout mobile, and previews processing, success, and failure. Failed or cancelled payment keeps the bag. A successful order is saved locally before the bag clears; confirmation shows customer details, payment status, items, and total. The order-history button in the menu reopens receipts after an app restart, and references continue in sequence. The two large-text overflows found in the bag and product details were fixed and verified with the bundled fonts. The menu also has a swipeable featured-products carousel and a horizontal category tab rail; product grids follow category swipes, and the underline stays synchronized with the selected page.
 
-This remains a demo: no order is sent to Smooch Cafe and no real payment is processed. Local history is device-specific and does not sync across devices.
+This remains a simulation: no order is sent to Smooch Cafe, no real payment is processed, and no PIN or OTP is requested. The wallet screen explicitly says it is not connected to GCash. Local history is device-specific and does not sync across devices.
 
 Reviewed on 28 October 2026 (Asia/Manila).
 

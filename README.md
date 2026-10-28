@@ -21,14 +21,14 @@ An installable debug APK is available after `flutter build apk --debug` at `buil
 - SHOP NOW opens the menu using `Navigator.push()` and `MaterialPageRoute`. Back returns to the Start Screen; cart and favorites remain available when entering again. Rapid taps open one menu. Reduced-motion settings show a still composition.
 - A coordinated 600 ms transition fades through teal before gently revealing the menu, configured through the Material page transition theme. Initial menu images are preloaded during the intro, and menu controls become active when the transition finishes.
 - All 92 products from `SmoochCafe/pages/products.html`, using its names, prices, categories, and local product images.
-- Pinned search and wrapping category chips keep every choice visible without category navigation arrows. Tap a selected category to return to All, or use Reset to clear search, category, and sorting together.
-- A swipeable featured-product carousel gives the menu an image-led entry point. Product cards slide and fade in when categories or sorting change; search results use a shorter transition. Reduced-motion settings skip these effects.
+- Search and a horizontally scrollable category tab rail stay visible above the menu. The selected category scrolls into view and has a moving teal underline; there are no category arrows. Tap a selected category to return to All, or use Reset to clear search, category, and sorting together.
+- Product grids follow horizontal swipes using `TabBarView`, keeping the active tab and displayed products in sync. The existing featured-product carousel remains on All. Reduced-motion settings make category taps jump directly to the selected page.
 - Search matches words in any order and ignores extra whitespace. Clearing search preserves the chosen category and sort order.
 - Every `Product.category` matches a filter choice. Descriptive product labels, such as Quarter Pounder or Brownies, are kept in `Product.subcategory` and remain searchable.
 - Product details, a favorites list, and browsing positions retained when switching tabs.
 - Compact product cards with shorter photos, price/Add controls side by side, and up to five columns on wide screens. Cards adapt for larger text and retain in-bag quantities and a persistent bag summary with Philippine peso totals.
 - Shared cart with quantities, item removal, and a live badge.
-- The bag leads to checkout with required name and Philippine mobile number, optional pickup notes, and a choice of cash at pickup or demo digital payment. Digital payment can simulate success, failure, or cancellation. The bag stays intact until an order is saved successfully.
+- The bag leads to checkout with required name and Philippine mobile number, optional pickup notes, and a choice of cash at pickup or a GCash-style payment preview. The wallet screen shows the checkout amount and masked mobile, then previews processing, success, failure, or cancellation. It never asks for a PIN or OTP, is not connected to GCash, and takes no money. The bag stays intact until an order is saved successfully.
 - Confirmation shows the saved receipt, customer details, payment method/status, products, quantities, and total. Order history reopens receipts after restarting the app, with references continuing in sequence. No order is sent to the cafe and no real payment is taken.
 - Cafe location, hours, phone number, and email copied from the supplied website.
 - Responsive phone, tablet, and desktop layouts, plus widget previews at the end of `lib/main.dart`.
@@ -37,7 +37,7 @@ Cart and favorites are kept in memory during the app session. Completed demo rec
 
 ## Design
 
-The app retains the website's dark teal `#0A4952`, teal `#0E6F7A`, and original coral `#F04C45` branding. Shopping screens use warm ivory `#F6F3ED`, white cards, and ink `#163B3D` for easier scanning. Primary buttons use deeper coral `#C23F38` for 5.17:1 contrast with white labels. The 3D splash retains its dark teal atmosphere.
+The app retains the website's dark teal `#0A4952`, teal `#0E6F7A`, and original coral `#F04C45` branding. Shopping screens use warm ivory `#F6F3ED`, white cards, and ink `#163B3D` for easier scanning. Primary buttons use deeper coral `#C23F38` for 5.17:1 contrast with white labels. The 3D splash retains its dark teal atmosphere. The simulated wallet screen uses blue to evoke the GCash payment flow and marks itself as a preview.
 
 Montserrat and Playfair Display are bundled locally, with their open font licenses in `assets/fonts/`. The supplied logo and photos are bundled as Flutter assets. See [the menu UI/UX audit](docs/menu-ui-ux-audit.md) for findings, color measurements, and before/after captures.
 
@@ -71,4 +71,4 @@ flutter test
 flutter build web
 ```
 
-The tests cover catalog assets and IDs, filtering, sorting, carousel swiping, result animation, cart/favorites, checkout validation, demo payment outcomes, failed storage safety, receipt restoration and references after restart, confirmation/history navigation, reduced motion, and narrow-screen layouts with the bundled fonts.
+The tests cover catalog assets and IDs, filtering, sorting, featured and category swipes, active tab synchronization, automatic category visibility, cart/favorites, checkout validation, demo payment outcomes, failed storage safety, receipt restoration and references after restart, confirmation/history navigation, reduced motion, and narrow-screen layouts with the bundled fonts.
