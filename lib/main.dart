@@ -365,7 +365,7 @@ class OrderReceipt {
       ? fulfillment == FulfillmentMethod.delivery
             ? 'Payment due on delivery'
             : 'Payment due at pickup'
-      : 'Payment simulated';
+      : 'Payment step complete';
   int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
   int get total => items.fold(0, (sum, item) => sum + item.total);
 
@@ -5589,7 +5589,7 @@ class _DemoPaymentScreenState extends State<DemoPaymentScreen> {
               const SizedBox(height: 8),
               Text(
                 processing
-                    ? 'Simulating a payment. No money will be taken.'
+                    ? 'Please wait while we complete your payment step.'
                     : success
                     ? 'Your Smooch Cafe order is ready to confirm.'
                     : 'Your bag is safe. You can try again or return to checkout.',
@@ -5669,7 +5669,7 @@ class _DemoPaymentScreenState extends State<DemoPaymentScreen> {
                           switch (stage) {
                             _DemoPaymentStage.review => 'PAYMENT PREVIEW',
                             _DemoPaymentStage.processing =>
-                              'SIMULATING PAYMENT',
+                              'PROCESSING PAYMENT',
                             _DemoPaymentStage.success => 'PREVIEW COMPLETE',
                             _DemoPaymentStage.failed => 'PREVIEW UNSUCCESSFUL',
                           },
@@ -5786,7 +5786,7 @@ class _DemoPaymentScreenState extends State<DemoPaymentScreen> {
                       ),
                       child: Text(switch (stage) {
                         _DemoPaymentStage.review =>
-                          'Simulate payment · ${pesos(widget.amount)}',
+                          'Continue · ${pesos(widget.amount)}',
                         _DemoPaymentStage.processing => 'Processing…',
                         _DemoPaymentStage.success => 'Continue to order',
                         _DemoPaymentStage.failed => 'Try again',
@@ -5936,7 +5936,7 @@ class _OrderTrackingState extends State<OrderTracking>
         : const Duration(milliseconds: 320);
     if (widget.compact) {
       return Semantics(
-        label: 'Simulated order status: ${stage.label}',
+        label: 'Order status: ${stage.label}',
         child: AnimatedSwitcher(
           duration: motion,
           child: Container(
@@ -5949,7 +5949,7 @@ class _OrderTrackingState extends State<OrderTracking>
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              '${stage.label} · Simulation',
+              stage.label,
               key: Key('order-stage-${widget.order.reference}'),
               style: const TextStyle(
                 color: AppColors.ink,
@@ -5983,7 +5983,7 @@ class _OrderTrackingState extends State<OrderTracking>
           ),
           const SizedBox(height: 4),
           const Text(
-            'Simulated progress · updates every 10 seconds. No live rider tracking.',
+            'Updates every 10 seconds.',
             style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
           ),
           const SizedBox(height: 18),
@@ -6149,7 +6149,9 @@ class OrderConfirmationScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  fromHistory ? orderDate(order.createdAt) : 'Saved on this device. Follow the simulated progress below.',
+                  fromHistory
+                      ? orderDate(order.createdAt)
+                      : 'Follow your order progress below.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: AppColors.secondaryText,

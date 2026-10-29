@@ -118,12 +118,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('order-stage-confirmed')), findsOneWidget);
-    expect(
-      find.text(
-        'Simulated progress · updates every 10 seconds. No live rider tracking.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Updates every 10 seconds.'), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 10));
     await tester.pump(const Duration(milliseconds: 350));
@@ -164,10 +159,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     final status = find.byKey(const Key('order-stage-SMC-0001'));
-    expect(tester.widget<Text>(status).data, 'Confirmed · Simulation');
+    expect(tester.widget<Text>(status).data, 'Confirmed');
     await tester.pump(const Duration(seconds: 10));
     await tester.pump(const Duration(milliseconds: 350));
-    expect(tester.widget<Text>(status).data, 'Preparing · Simulation');
+    expect(tester.widget<Text>(status).data, 'Preparing');
     expect(tester.takeException(), isNull);
   });
 

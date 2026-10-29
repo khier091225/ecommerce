@@ -2,6 +2,8 @@
 
 Reviewed and implemented on 29 October 2026 (Asia/Manila). This is the current implementation audit; earlier reviews in this folder describe earlier versions.
 
+**Wording follow-up:** at the user's request, customer-facing “demo” and “simulation” wording was subsequently removed from history, tracking, receipts, payment processing, and accessibility labels. Statuses now show the stage alone, digital receipts say “Payment step complete,” and confirmation says “Follow your order progress below.” The payment-preview notice remains. References to earlier labels and the audit screenshots below record the original audit version; the local payment/order behavior is unchanged.
+
 ## Scope and result
 
 Reviewed the Start Screen, menu/search/categories/sorting, featured carousel, product cards, product details, bag, checkout, delivery location picker, payment preview, confirmation, saved receipts, tracking, Cafe info, shared controls, persistence, and navigation. Changes were implemented in the existing application, with all application Dart retained in `lib/main.dart`.

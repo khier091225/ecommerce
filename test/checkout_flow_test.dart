@@ -50,7 +50,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(DemoPaymentScreen), findsOneWidget);
       expect(
-        find.textContaining(RegExp(r'\bdemo\b', caseSensitive: false)),
+        find.textContaining(
+          RegExp(r'\b(demo|simulat\w*)\b', caseSensitive: false),
+        ),
         findsNothing,
       );
       expect(find.text('GCash wallet'), findsOneWidget);
@@ -80,9 +82,11 @@ void main() {
       await tester.tap(find.byKey(const Key('continue-after-payment')));
       await tester.pumpAndSettle();
       expect(find.byType(OrderConfirmationScreen), findsOneWidget);
-      expect(find.text('GCash · Payment simulated'), findsOneWidget);
+      expect(find.text('GCash · Payment step complete'), findsOneWidget);
       expect(
-        find.textContaining(RegExp(r'\bdemo\b', caseSensitive: false)),
+        find.textContaining(
+          RegExp(r'\b(demo|simulat\w*)\b', caseSensitive: false),
+        ),
         findsNothing,
       );
       expect(shop.cartCount, 0);
