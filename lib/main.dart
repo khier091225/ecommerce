@@ -10,6 +10,7 @@ import 'package:flutter_map/flutter_map.dart'
     show FlutterMap, MapController, MapOptions, Marker, MarkerLayer, TileLayer;
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart' show LatLng;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -263,6 +264,32 @@ abstract final class CheckoutValidation {
       : 'Enter a valid PH mobile number';
   static String? address(String? value) =>
       (value ?? '').trim().length < 8 ? 'Enter your delivery address' : null;
+
+  static const deliveryCenter = LatLng(14.3158, 121.0561);
+  static const deliveryRadiusKm = 10.0;
+
+  static bool isWithinDeliveryArea(LatLng? point) {
+    if (point == null ||
+        !point.latitude.isFinite ||
+        !point.longitude.isFinite ||
+        point.latitude.abs() > 90 ||
+        point.longitude.abs() > 180) {
+      return false;
+    }
+    const earthRadiusKm = 6371.0;
+    final latitudeDelta =
+        (point.latitude - deliveryCenter.latitude) * math.pi / 180;
+    final longitudeDelta =
+        (point.longitude - deliveryCenter.longitude) * math.pi / 180;
+    final a =
+        math.sin(latitudeDelta / 2) * math.sin(latitudeDelta / 2) +
+        math.cos(deliveryCenter.latitude * math.pi / 180) *
+            math.cos(point.latitude * math.pi / 180) *
+            math.sin(longitudeDelta / 2) *
+            math.sin(longitudeDelta / 2);
+    final distanceKm = earthRadiusKm * 2 * math.asin(math.sqrt(a));
+    return distanceKm <= deliveryRadiusKm;
+  }
 }
 
 String orderDate(DateTime value) {
@@ -1604,7 +1631,11 @@ class ShopController extends ChangeNotifier {
         (deliveryLatitude != null &&
             (!deliveryLatitude.isFinite || deliveryLatitude.abs() > 90)) ||
         (deliveryLongitude != null &&
-            (!deliveryLongitude.isFinite || deliveryLongitude.abs() > 180))) {
+            (!deliveryLongitude.isFinite || deliveryLongitude.abs() > 180)) ||
+        (deliveryLatitude != null &&
+            !CheckoutValidation.isWithinDeliveryArea(
+              LatLng(deliveryLatitude, deliveryLongitude!),
+            ))) {
       return null;
     }
     _placingOrder = true;
@@ -4491,6 +4522,8 @@ class DeliveryLocationSelection {
 class DeliveryLocationService {
   const DeliveryLocationService();
 
+  static DateTime? _lastNominatimRequest;
+
   Future<LatLng> currentLocation() async {
     if (!kIsWeb) {
       if (!await Geolocator.isLocationServiceEnabled()) {
@@ -4515,6 +4548,16 @@ class DeliveryLocationService {
   }
 
   Future<String?> addressFor(LatLng point) async {
+    if (!point.latitude.isFinite ||
+        !point.longitude.isFinite ||
+        point.latitude.abs() > 90 ||
+        point.longitude.abs() > 180) {
+      return null;
+    }
+
+    final openStreetMapAddress = await _openStreetMapAddress(point);
+    if (openStreetMapAddress != null) return openStreetMapAddress;
+
     if (kIsWeb ||
         (defaultTargetPlatform != TargetPlatform.android &&
             defaultTargetPlatform != TargetPlatform.iOS &&
@@ -4541,6 +4584,62 @@ class DeliveryLocationService {
           .where((part) => part.isNotEmpty && unique.add(part.toLowerCase()))
           .join(', ');
       return address.isEmpty ? null : address;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _openStreetMapAddress(LatLng point) async {
+    final previousRequest = _lastNominatimRequest;
+    if (previousRequest != null) {
+      final wait =
+          const Duration(seconds: 1) -
+          DateTime.now().difference(previousRequest);
+      if (wait > Duration.zero) await Future<void>.delayed(wait);
+    }
+    _lastNominatimRequest = DateTime.now();
+
+    final uri = Uri.https('nominatim.openstreetmap.org', '/reverse', {
+      'format': 'jsonv2',
+      'lat': point.latitude.toStringAsFixed(6),
+      'lon': point.longitude.toStringAsFixed(6),
+      'zoom': '18',
+      'addressdetails': '1',
+    });
+    try {
+      final response = await http
+          .get(
+            uri,
+            headers: {
+              'Accept': 'application/json',
+              if (!kIsWeb) 'User-Agent': 'SmoochCafeFlutter/1.0',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return null;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final address = data['address'];
+      if (address is Map<String, dynamic>) {
+        final parts = [
+          address['house_number'],
+          address['road'] ?? address['pedestrian'] ?? address['footway'],
+          address['neighbourhood'] ?? address['suburb'],
+          address['city'] ?? address['town'] ?? address['village'],
+          address['state'],
+          address['postcode'],
+        ];
+        final unique = <String>{};
+        final formatted = parts
+            .whereType<String>()
+            .map((part) => part.trim())
+            .where((part) => part.isNotEmpty && unique.add(part.toLowerCase()))
+            .join(', ');
+        if (formatted.isNotEmpty) return formatted;
+      }
+      final displayName = data['display_name'];
+      return displayName is String && displayName.trim().isNotEmpty
+          ? displayName.trim()
+          : null;
     } catch (_) {
       return null;
     }
@@ -4684,7 +4783,10 @@ class _DeliveryMapPickerState extends State<DeliveryMapPicker> {
     try {
       final location = await widget.locationService.currentLocation();
       if (!mounted || request != locationRequest) return;
-      setState(() => pin = location);
+      setState(() {
+        pin = location;
+        error = CheckoutValidation.isWithinDeliveryArea(location) ? null : 'This location is outside our 10 km delivery area around Carmona.';
+      });
       if (mapReady) mapController.move(location, 17);
     } catch (failure) {
       if (mounted && request == locationRequest) {
@@ -4704,7 +4806,15 @@ class _DeliveryMapPickerState extends State<DeliveryMapPicker> {
   }
 
   Future<void> confirm() async {
-    if (pin == null || resolving || locating) return;
+    if (pin == null ||
+        resolving ||
+        locating ||
+        !CheckoutValidation.isWithinDeliveryArea(pin)) {
+      setState(
+        () => error = 'Choose a location within 10 km of Carmona to continue.',
+      );
+      return;
+    }
     setState(() => resolving = true);
     final selected = pin!;
     String? suggestedAddress;
@@ -4748,7 +4858,9 @@ class _DeliveryMapPickerState extends State<DeliveryMapPicker> {
                       locationRequest++;
                       locating = false;
                       pin = point;
-                      error = null;
+                      error = CheckoutValidation.isWithinDeliveryArea(point)
+                          ? null
+                          : 'This location is outside our 10 km delivery area around Carmona.';
                     }),
             ),
             Positioned(
@@ -4767,7 +4879,7 @@ class _DeliveryMapPickerState extends State<DeliveryMapPicker> {
                   child: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                     child: Text(
-                      'Tap the map to place your delivery pin',
+                      'Delivery available within 10 km of Carmona. Tap to place your pin.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 11,
@@ -4838,7 +4950,11 @@ class _DeliveryMapPickerState extends State<DeliveryMapPicker> {
                     const SizedBox(height: 10),
                     FilledButton.icon(
                       key: const Key('confirm-delivery-pin'),
-                      onPressed: pin == null || resolving || locating
+                      onPressed:
+                          pin == null ||
+                              resolving ||
+                              locating ||
+                              !CheckoutValidation.isWithinDeliveryArea(pin)
                           ? null
                           : confirm,
                       icon: resolving
@@ -4918,11 +5034,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
         );
     if (!mounted || selected == null) return;
-    setState(() => deliveryPin = selected.point);
-    if ((address.text.trim().isEmpty || address.text == suggestedAddress) &&
+    final previousSuggestion = suggestedAddress;
+    setState(() {
+      deliveryPin = selected.point;
+      suggestedAddress = selected.suggestedAddress;
+    });
+    if ((address.text.trim().isEmpty || address.text == previousSuggestion) &&
         selected.suggestedAddress?.isNotEmpty == true) {
       address.text = selected.suggestedAddress!;
-      suggestedAddress = selected.suggestedAddress;
     }
   }
 
@@ -5078,16 +5197,50 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         prefixIcon: Icon(Icons.location_on_outlined),
                         alignLabelWithHint: true,
                       ),
-                      validator: CheckoutValidation.address,
+                      validator: (value) {
+                        final addressError = CheckoutValidation.address(value);
+                        if (addressError != null) return addressError;
+                        if (deliveryPin != null &&
+                            !CheckoutValidation.isWithinDeliveryArea(
+                              deliveryPin,
+                            )) {
+                          return 'That pin is outside our 10 km delivery area';
+                        }
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'GPS is optional. Always include your house number, street and city.',
+                      'Delivery is available within 10 km of Carmona, Cavite. If you use the map, your pin must be within this area. Include your house number, street and city.',
                       style: TextStyle(
                         color: AppColors.secondaryText,
                         fontSize: 12,
                       ),
                     ),
+                    if (suggestedAddress?.isNotEmpty == true) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Map address suggestion: $suggestedAddress',
+                        style: const TextStyle(
+                          color: AppColors.secondaryText,
+                          fontSize: 12,
+                        ),
+                      ),
+                      if (address.text.trim() != suggestedAddress)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            key: const Key('use-suggested-address'),
+                            onPressed: busy
+                                ? null
+                                : () => setState(() {
+                                    address.text = suggestedAddress!;
+                                  }),
+                            icon: const Icon(Icons.edit_location_alt_outlined),
+                            label: const Text('Use suggested address'),
+                          ),
+                        ),
+                    ],
                     const SizedBox(height: 12),
                     Wrap(
                       spacing: 10,

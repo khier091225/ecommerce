@@ -5,6 +5,18 @@ import 'package:flutter_map/flutter_map.dart' show FlutterMap, TapPosition;
 import 'package:latlong2/latlong.dart' show LatLng;
 
 void main() {
+  test('Delivery area accepts Carmona and rejects distant locations', () {
+    expect(
+      CheckoutValidation.isWithinDeliveryArea(const LatLng(14.3158, 121.0561)),
+      isTrue,
+    );
+    expect(
+      CheckoutValidation.isWithinDeliveryArea(const LatLng(14.7, 121.0)),
+      isFalse,
+    );
+    expect(CheckoutValidation.isWithinDeliveryArea(null), isFalse);
+  });
+
   OrderReceipt receipt(
     DateTime createdAt, {
     FulfillmentMethod fulfillment = FulfillmentMethod.delivery,
@@ -251,6 +263,59 @@ void main() {
     expect(shop.orders.single.deliveryLongitude, 121.0561);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'Map address suggestion preserves manual text and can be applied',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final shop = ShopController(repository: const MenuRepository());
+      addTearDown(shop.dispose);
+      shop.addToCart(shop.products.first);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.theme,
+          home: CheckoutScreen(
+            controller: shop,
+            locationService: const _FakeLocationService(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      const manualAddress = 'Unit 2, Example Street, Carmona';
+      await tester.enterText(
+        find.byKey(const Key('delivery-address')),
+        manualAddress,
+      );
+      final gpsButton = find.byKey(const Key('use-gps-address'));
+      await tester.ensureVisible(gpsButton);
+      await tester.pumpAndSettle();
+      await tester.tap(gpsButton);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirm-delivery-pin')));
+      await tester.pumpAndSettle();
+      final addressField = tester.widget<TextFormField>(
+        find.byKey(const Key('delivery-address')),
+      );
+      expect(addressField.controller!.text, manualAddress);
+      final useSuggestion = find.byKey(const Key('use-suggested-address'));
+      expect(useSuggestion, findsOneWidget);
+      await tester.ensureVisible(useSuggestion);
+      await tester.pumpAndSettle();
+      await tester.tap(useSuggestion);
+      await tester.pump();
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('delivery-address')))
+            .controller!
+            .text,
+        '12 Rizal Street, Carmona, Cavite',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('Map tap places a delivery pin without GPS', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
