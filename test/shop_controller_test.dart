@@ -179,7 +179,7 @@ void main() {
         deliveryAddress: '14 Rizal Street, Carmona, Cavite',
       );
       expect(next?.reference, 'SMC-0002');
-      expect(next?.paymentStatus, 'Payment step complete');
+      expect(next?.paymentStatus, 'Payment simulated');
       expect(restored.orders.map((order) => order.reference), [
         'SMC-0002',
         'SMC-0001',

@@ -119,7 +119,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('order-stage-confirmed')), findsOneWidget);
     expect(
-      find.text('Estimated progress · updates every 10 seconds'),
+      find.text(
+        'Simulated progress · updates every 10 seconds. No live rider tracking.',
+      ),
       findsOneWidget,
     );
 
@@ -162,10 +164,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     final status = find.byKey(const Key('order-stage-SMC-0001'));
-    expect(tester.widget<Text>(status).data, 'Confirmed');
+    expect(tester.widget<Text>(status).data, 'Confirmed · Simulation');
     await tester.pump(const Duration(seconds: 10));
     await tester.pump(const Duration(milliseconds: 350));
-    expect(tester.widget<Text>(status).data, 'Preparing');
+    expect(tester.widget<Text>(status).data, 'Preparing · Simulation');
     expect(tester.takeException(), isNull);
   });
 
@@ -255,16 +257,12 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Map tap places a delivery pin without GPS', (
-    tester,
-  ) async {
+  testWidgets('Map tap places a delivery pin without GPS', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(
-      const MaterialApp(home: DeliveryMapPicker()),
-    );
+    await tester.pumpWidget(const MaterialApp(home: DeliveryMapPicker()));
     await tester.pumpAndSettle();
     final confirm = find.byKey(const Key('confirm-delivery-pin'));
     expect(tester.widget<FilledButton>(confirm).onPressed, isNull);

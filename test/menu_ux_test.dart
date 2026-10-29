@@ -118,6 +118,8 @@ void main() {
         isTrue,
       );
       await tapCategory(tester, 'More Drinks');
+      expect(shop.category, 'More Drinks');
+      await tapCategory(tester, 'All');
       expect(shop.category, 'All');
       expect(shop.filteredProducts, hasLength(92));
       expect(tester.takeException(), isNull);

@@ -80,7 +80,7 @@ void main() {
       await tester.tap(find.byKey(const Key('continue-after-payment')));
       await tester.pumpAndSettle();
       expect(find.byType(OrderConfirmationScreen), findsOneWidget);
-      expect(find.text('GCash · Payment step complete'), findsOneWidget);
+      expect(find.text('GCash · Payment simulated'), findsOneWidget);
       expect(
         find.textContaining(RegExp(r'\bdemo\b', caseSensitive: false)),
         findsNothing,

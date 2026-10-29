@@ -65,7 +65,7 @@ void main() {
     },
   );
 
-  testWidgets('Shop Now, search, details, quantity changes, and empty cart', (
+  testWidgets('ORDER NOW, search, details, quantity changes, and empty cart', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -167,7 +167,7 @@ void main() {
     await tester.tap(find.byKey(const Key('continue-shopping')));
     await tester.pumpAndSettle();
     expect(find.text('Your orders'), findsOneWidget);
-    await tester.tap(find.text('Our cafe'));
+    await tester.tap(find.text('Cafe info'));
     await tester.pumpAndSettle();
     expect(
       find.text('Come for the coffee.\nStay for the comfort.'),
@@ -204,7 +204,7 @@ void main() {
   }
 
   testWidgets(
-    'Start screen waits for Shop Now and pushes a MaterialPageRoute',
+    'Start screen waits for ORDER NOW and pushes a MaterialPageRoute',
     (tester) async {
       await tester.pumpWidget(const MiniShopApp());
       await tester.pump(const Duration(seconds: 10));
@@ -234,7 +234,7 @@ void main() {
   );
 
   testWidgets(
-    'Repeated Shop Now taps open one menu and Back preserves the bag',
+    'Repeated ORDER NOW taps open one menu and Back preserves the bag',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
@@ -370,7 +370,7 @@ void main() {
   );
 
   testWidgets(
-    'Start screen supports larger text with a reachable Shop Now button',
+    'Start screen supports larger text with a reachable ORDER NOW button',
     (tester) async {
       final controller = ShopController(repository: const MenuRepository());
       addTearDown(controller.dispose);

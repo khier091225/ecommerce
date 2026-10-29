@@ -2,6 +2,8 @@
 
 Reviewed on 28 October 2026 (Asia/Manila).
 
+**Current status, 29 October 2026:** this file preserves the original historical audit below. See the [current application audit and acceptance matrix](application-audit-2026-10-29.md) for the implemented version: mandatory **ORDER NOW**, `Navigator.push()` / `MaterialPageRoute`, aligned categories, Order History replacing Favorites, delivery-only checkout with OpenStreetMap, 63 passing tests, clean analysis, and a successful web build. All application Dart remains in `lib/main.dart`. Final submission documentation and video remain deferred.
+
 **Implementation update after this review:** plan steps 1–4 are complete. `StartScreen` waits for SHOP NOW and opens `MenuScreen` through `Navigator.push()` with `MaterialPageRoute`, retaining the 3D design and smooth transition. All 92 products now use a `category` from the filter list, with descriptive labels in `subcategory`. All 25 tests pass, analysis is clean, and web/Android builds succeed. Back/re-entry, retained cart/favorites, reduced motion, and category behavior were verified. The required submission documentation and video (steps 5–6) are deferred at the user's request.
 
 **Initial audit verdict, before those changes:** the shopping application met most functional requirements, but was not ready for final submission. The findings and comparison below record that original review; the opening-screen and category issues have since been resolved as described above.

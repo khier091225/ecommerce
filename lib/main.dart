@@ -7,13 +7,7 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
 import 'package:flutter_map/flutter_map.dart'
-    show
-        FlutterMap,
-        MapController,
-        MapOptions,
-        Marker,
-        MarkerLayer,
-        TileLayer;
+    show FlutterMap, MapController, MapOptions, Marker, MarkerLayer, TileLayer;
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
@@ -258,6 +252,19 @@ class CartItem {
 
 String pesos(num amount) => '\u20b1${amount.toStringAsFixed(2)}';
 
+String normalizedMobile(String value) => value.replaceAll(RegExp(r'[\s-]'), '');
+
+abstract final class CheckoutValidation {
+  static String? name(String? value) =>
+      (value ?? '').trim().length < 2 ? 'Enter your name' : null;
+  static String? mobile(String? value) =>
+      RegExp(r'^(09\d{9}|\+639\d{9})$').hasMatch(normalizedMobile(value ?? ''))
+      ? null
+      : 'Enter a valid PH mobile number';
+  static String? address(String? value) =>
+      (value ?? '').trim().length < 8 ? 'Enter your delivery address' : null;
+}
+
 String orderDate(DateTime value) {
   final local = value.toLocal();
   String two(int number) => number.toString().padLeft(2, '0');
@@ -326,7 +333,12 @@ class OrderReceipt {
   final double? deliveryLatitude;
   final double? deliveryLongitude;
   LatLng? get deliveryPoint =>
-      deliveryLatitude != null && deliveryLongitude != null
+      deliveryLatitude != null &&
+          deliveryLongitude != null &&
+          deliveryLatitude!.isFinite &&
+          deliveryLongitude!.isFinite &&
+          deliveryLatitude!.abs() <= 90 &&
+          deliveryLongitude!.abs() <= 180
       ? LatLng(deliveryLatitude!, deliveryLongitude!)
       : null;
   List<OrderStage> get stages => fulfillment == FulfillmentMethod.delivery
@@ -353,7 +365,7 @@ class OrderReceipt {
       ? fulfillment == FulfillmentMethod.delivery
             ? 'Payment due on delivery'
             : 'Payment due at pickup'
-      : 'Payment step complete';
+      : 'Payment simulated';
   int get itemCount => items.fold(0, (sum, item) => sum + item.quantity);
   int get total => items.fold(0, (sum, item) => sum + item.total);
 
@@ -1378,9 +1390,13 @@ class ShopController extends ChangeNotifier {
   final Map<String, CartItem> _cart = {};
   final List<OrderReceipt> _orders = [];
   bool _placingOrder = false;
+  bool loadingOrders = false;
+  String? historyError;
+  bool _disposed = false;
   Future<void>? _restoreTask;
   int _nextOrderNumber = 1;
   String _query = '';
+  List<String> _queryWords = const [];
   String _category = 'All';
   MenuSort _sort = MenuSort.recommended;
 
@@ -1430,13 +1446,13 @@ class ShopController extends ChangeNotifier {
   bool _matchesQuery(Product product) {
     final text = '${product.name} ${product.category} ${product.subcategory}'
         .toLowerCase();
-    final words = _query.trim().toLowerCase().split(RegExp(r'\s+'));
-    return words.every(text.contains);
+    return _queryWords.every(text.contains);
   }
 
   int quantityOf(Product product) => _cart[product.id]?.quantity ?? 0;
 
   void sortBy(MenuSort value) {
+    if (_sort == value) return;
     _sort = value;
     notifyListeners();
   }
@@ -1446,17 +1462,21 @@ class ShopController extends ChangeNotifier {
   int get total => _cart.values.fold(0, (sum, item) => sum + item.total);
 
   void search(String value) {
+    if (_query == value) return;
     _query = value;
+    _queryWords = value.trim().toLowerCase().split(RegExp(r'\s+'));
     notifyListeners();
   }
 
   void selectCategory(String value) {
+    if (_category == value || !categories.contains(value)) return;
     _category = value;
     notifyListeners();
   }
 
   void resetFilters() {
     _query = '';
+    _queryWords = const [];
     _category = 'All';
     _sort = MenuSort.recommended;
     notifyListeners();
@@ -1493,25 +1513,67 @@ class ShopController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> restoreOrders() => _restoreTask ??= _loadOrders();
+  Future<void> restoreOrders({bool retry = false}) {
+    if (retry && !loadingOrders) _restoreTask = null;
+    if (_restoreTask != null) return _restoreTask!;
+    loadingOrders = true;
+    historyError = null;
+    notifyListeners();
+    return _restoreTask = _loadOrders();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
 
   Future<void> _loadOrders() async {
-    final saved = await orderStore.read();
-    if (saved == null) return;
     try {
+      final saved = await orderStore.read();
+      if (_disposed || saved == null) return;
       final data = jsonDecode(saved) as Map<String, dynamic>;
-      final restored = (data['orders'] as List)
-          .map((entry) => OrderReceipt.fromJson(entry as Map<String, dynamic>))
-          .toList();
+      final restored = <OrderReceipt>[];
+      var nextNumber = math.max(1, (data['nextOrderNumber'] as int?) ?? 1);
+      final seenReferences = <String>{};
+      for (final entry in data['orders'] as List) {
+        try {
+          final record = entry as Map<String, dynamic>;
+          final reference = record['reference'] as String;
+          final number = int.tryParse(reference.replaceFirst('SMC-', ''));
+          if (number != null) nextNumber = math.max(nextNumber, number + 1);
+          final order = OrderReceipt.fromJson(record);
+          if (order.items.isEmpty ||
+              order.items.any(
+                (item) => item.quantity < 1 || item.product.price < 0,
+              )) {
+            throw const FormatException('Invalid receipt items');
+          }
+          if (seenReferences.add(reference)) restored.add(order);
+        } on FormatException {
+          historyError = 'Some saved orders could not be read.';
+        } on TypeError {
+          historyError = 'Some saved orders could not be read.';
+        } on ArgumentError {
+          historyError = 'Some saved orders could not be read.';
+        }
+      }
+      restored.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       _orders
         ..clear()
         ..addAll(restored);
-      _nextOrderNumber = math.max(1, data['nextOrderNumber'] as int);
-      notifyListeners();
+      _nextOrderNumber = nextNumber;
     } on FormatException {
-      // A damaged local record must not stop the menu from opening.
+      historyError = 'Saved orders could not be read on this device.';
     } on TypeError {
-      // Ignore a record from an incompatible older schema.
+      historyError = 'Saved orders could not be read on this device.';
+    } catch (_) {
+      historyError = 'Could not load your orders. Please try again.';
+      _restoreTask = null;
+      rethrow;
+    } finally {
+      loadingOrders = false;
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -1532,21 +1594,29 @@ class ShopController extends ChangeNotifier {
     double? deliveryLatitude,
     double? deliveryLongitude,
   }) async {
-    if (_cart.isEmpty ||
+    if (_disposed ||
+        _cart.isEmpty ||
         _placingOrder ||
-        deliveryAddress.trim().length < 8 ||
-        (deliveryLatitude == null) != (deliveryLongitude == null)) {
+        CheckoutValidation.name(customerName) != null ||
+        CheckoutValidation.mobile(mobileNumber) != null ||
+        CheckoutValidation.address(deliveryAddress) != null ||
+        (deliveryLatitude == null) != (deliveryLongitude == null) ||
+        (deliveryLatitude != null &&
+            (!deliveryLatitude.isFinite || deliveryLatitude.abs() > 90)) ||
+        (deliveryLongitude != null &&
+            (!deliveryLongitude.isFinite || deliveryLongitude.abs() > 180))) {
       return null;
     }
     _placingOrder = true;
     notifyListeners();
     try {
       await restoreOrders();
+      if (_disposed) return null;
       final order = OrderReceipt(
         reference: 'SMC-${_nextOrderNumber.toString().padLeft(4, '0')}',
         items: cartItems,
         customerName: customerName.trim(),
-        mobileNumber: mobileNumber.trim(),
+        mobileNumber: normalizedMobile(mobileNumber),
         notes: notes.trim(),
         paymentMethod: paymentMethod,
         createdAt: DateTime.now(),
@@ -1559,11 +1629,11 @@ class ShopController extends ChangeNotifier {
       _nextOrderNumber++;
       _orders.insert(0, order);
       _cart.clear();
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       return order;
     } finally {
       _placingOrder = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 }
@@ -1630,15 +1700,17 @@ class ContentWidth extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.symmetric(horizontal: 24),
+    this.maxWidth = 1160,
   });
   final Widget child;
   final EdgeInsetsGeometry padding;
+  final double maxWidth;
 
   @override
   Widget build(BuildContext context) => Center(
     heightFactor: 1,
     child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 1160),
+      constraints: BoxConstraints(maxWidth: maxWidth),
       child: SizedBox(
         width: double.infinity,
         child: Padding(padding: padding, child: child),
@@ -1685,6 +1757,23 @@ class ProductImage extends StatelessWidget {
       ),
     ),
   );
+}
+
+Future<void> openCafeLink(BuildContext context, Uri uri) async {
+  try {
+    if (await launchUrl(uri)) return;
+  } catch (_) {
+    // Some devices have no application that can handle this link.
+  }
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Could not open the link. You can copy the details instead.',
+        ),
+      ),
+    );
+  }
 }
 
 class CartButton extends StatefulWidget {
@@ -1963,8 +2052,8 @@ class QuantityPicker extends StatelessWidget {
           onPressed: onDecrease,
           icon: const Icon(Icons.remove, size: 18),
         ),
-        SizedBox(
-          width: 28,
+        ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 28),
           child: Text(
             '$quantity',
             textAlign: TextAlign.center,
@@ -2022,7 +2111,7 @@ class StartScreen extends StatefulWidget {
   const StartScreen({super.key, required this.controller});
 
   final ShopController controller;
-  static const duration = Duration(milliseconds: 4600);
+  static const duration = Duration(milliseconds: 2400);
   static const transitionDuration = Duration(milliseconds: 600);
 
   @override
@@ -2127,6 +2216,88 @@ class _StartScreenState extends State<StartScreen>
     super.dispose();
   }
 
+  Widget coffeeScene(double height) => SizedBox(
+    width: 500,
+    height: height,
+    child: RepaintBoundary(
+      child: Semantics(
+        label: 'A floating Smooch Cafe cup with coffee beans and rising steam',
+        image: true,
+        child: ExcludeSemantics(
+          child: AnimatedBuilder(
+            animation: Listenable.merge([_animation, _idle]),
+            builder: (context, _) => CustomPaint(
+              key: const Key('coffee-scene'),
+              painter: CoffeeScenePainter(
+                progress: _animation.value,
+                idlePhase: _idle.value,
+                reducedMotion: _reducedMotion ?? false,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget introduction(bool wide, bool compact) => Column(
+    crossAxisAlignment: wide
+        ? CrossAxisAlignment.start
+        : CrossAxisAlignment.center,
+    children: [
+      Text(
+        'A little magic.',
+        textAlign: wide ? TextAlign.start : TextAlign.center,
+        style: displayStyle(
+          wide
+              ? 46
+              : compact
+              ? 31
+              : 38,
+          color: AppColors.white,
+        ),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        'A lot of Smooch.',
+        textAlign: wide ? TextAlign.start : TextAlign.center,
+        style: displayStyle(
+          wide
+              ? 46
+              : compact
+              ? 31
+              : 38,
+          color: AppColors.coral,
+        ),
+      ),
+      const SizedBox(height: 16),
+      Text(
+        'Handcrafted sips. Comforting bites.\nYour daily dose of happy starts here.',
+        textAlign: wide ? TextAlign.start : TextAlign.center,
+        style: const TextStyle(
+          fontSize: 14,
+          height: 1.6,
+          color: AppColors.muted,
+        ),
+      ),
+    ],
+  );
+
+  Widget orderAction() => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 360),
+    child: SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        key: const Key('enter-store'),
+        onPressed: _leaving ? null : _openMenu,
+        iconAlignment: IconAlignment.end,
+        icon: const Icon(Icons.arrow_forward),
+        label: const Text('ORDER NOW'),
+        style: FilledButton.styleFrom(minimumSize: const Size(48, 56)),
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: AppColors.dark,
@@ -2142,169 +2313,78 @@ class _StartScreenState extends State<StartScreen>
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final compact = constraints.maxHeight < 700;
-            final sceneHeight = (constraints.maxHeight * .43).clamp(
-              180.0,
-              370.0,
-            );
-            return AnimatedBuilder(
-              animation: _animation,
-              builder: (context, _) {
-                final progress = _animation.value;
-                final reveal = Curves.easeOut.transform(
-                  ((progress - .12) / .25).clamp(0.0, 1.0),
-                );
-                return SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.auto_awesome_outlined,
-                                  size: 16,
-                                  color: AppColors.coral,
-                                ),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: Text(
-                                    'SMOOCH CAFE',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      letterSpacing: 1.6,
-                                      color: AppColors.muted,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const SizedBox(height: 8),
-                              BrandLogo(width: compact ? 142 : 178),
-                              SizedBox(
-                                width: math.min(constraints.maxWidth, 500),
-                                height: sceneHeight,
-                                child: RepaintBoundary(
-                                  child: Semantics(
-                                    label: 'A floating Smooch Cafe cup with orbiting coffee beans and rising steam',
-                                    image: true,
-                                    child: ExcludeSemantics(
-                                      child: AnimatedBuilder(
-                                        animation: _idle,
-                                        builder: (context, _) => CustomPaint(
-                                          key: const Key('coffee-scene'),
-                                          painter: CoffeeScenePainter(
-                                            progress: progress,
-                                            idlePhase: _idle.value,
-                                            reducedMotion:
-                                                _reducedMotion ?? false,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Opacity(
-                                opacity: _reducedMotion == true ? 1 : reveal,
-                                child: Transform.translate(
-                                  offset: Offset(
-                                    0,
-                                    _reducedMotion == true
-                                        ? 0
-                                        : 16 * (1 - reveal),
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      Text(
-                                        'A little magic.',
-                                        textAlign: TextAlign.center,
-                                        style: displayStyle(
-                                          compact ? 31 : 38,
-                                          color: AppColors.white,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'A lot of Smooch.',
-                                        textAlign: TextAlign.center,
-                                        style: displayStyle(
-                                          compact ? 31 : 38,
-                                          color: AppColors.coral,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 15),
-                                      const Text(
-                                        'Your daily dose of happy starts here.',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          height: 1.7,
-                                          color: AppColors.muted,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          Padding(
-                            padding: EdgeInsets.only(
-                              top: compact ? 26 : 36,
-                              bottom: 28,
-                            ),
-                            child: Column(
-                              children: [
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 360,
-                                  ),
-                                  child: SizedBox(
-                                    width: double.infinity,
-                                    child: FilledButton.icon(
-                                      key: const Key('enter-store'),
-                                      onPressed: _leaving ? null : _openMenu,
-                                      iconAlignment: IconAlignment.end,
-                                      icon: const Icon(Icons.arrow_forward),
-                                      label: const Text('ORDER NOW'),
-                                      style: FilledButton.styleFrom(
-                                        minimumSize: const Size(48, 56),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 17),
-                                const Text(
-                                  'COFFEE. COMFORT. CONNECTION.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 8,
-                                    letterSpacing: 1.9,
-                                    color: AppColors.muted,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+            final wide =
+                constraints.maxWidth >= 850 &&
+                MediaQuery.textScalerOf(context).scale(14) < 23;
+            final compact = constraints.maxHeight < 740;
+            final sceneHeight = wide
+                ? 460.0
+                : (constraints.maxHeight * (compact ? .34 : .39)).clamp(
+                    160.0,
+                    340.0,
+                  );
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: ContentWidth(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 20,
                   ),
-                );
-              },
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'SMOOCH CAFE · CARMONA',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          letterSpacing: 1.8,
+                          color: AppColors.muted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: wide ? 32 : 18),
+                      if (wide)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const BrandLogo(width: 178),
+                                  const SizedBox(height: 28),
+                                  introduction(true, false),
+                                  const SizedBox(height: 32),
+                                  orderAction(),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 24),
+                            Expanded(child: coffeeScene(sceneHeight)),
+                          ],
+                        )
+                      else ...[
+                        BrandLogo(width: compact ? 142 : 164),
+                        coffeeScene(sceneHeight),
+                        introduction(false, compact),
+                        const SizedBox(height: 28),
+                        orderAction(),
+                      ],
+                      const SizedBox(height: 24),
+                      const Text(
+                        'COFFEE. COMFORT. CONNECTION.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          letterSpacing: 1.5,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             );
           },
         ),
@@ -2481,9 +2561,7 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
 
   void selectCategory(String category) {
     if (!ShopController.categories.contains(category)) return;
-    final target = category == shop.category && category != 'All'
-        ? 'All'
-        : category;
+    final target = category;
     FocusManager.instance.primaryFocus?.unfocus();
     final index = ShopController.categories.indexOf(target);
     if (MediaQuery.disableAnimationsOf(context)) {
@@ -2518,7 +2596,9 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final wide = constraints.maxWidth >= 900;
+      final wide =
+          constraints.maxWidth >= 900 &&
+          MediaQuery.textScalerOf(context).scale(14) <= 18;
       final padding = wide ? 24.0 : 16.0;
       final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
       final searchHeight = math.max(56.0, 14 * scale + 32);
@@ -2551,7 +2631,7 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
                       for (final entry in [
                         'Our menu',
                         'Order history',
-                        'Our cafe',
+                        'Cafe info',
                       ].asMap().entries)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -2623,7 +2703,7 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
                                 Icons.storefront,
                                 color: AppColors.dark,
                               ),
-                              label: 'Our cafe',
+                              label: 'Cafe info',
                             ),
                           ],
                         ),
@@ -3759,7 +3839,11 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
     setState(() => adding = true);
     widget.controller.addToCart(widget.product, quantity: addedQuantity);
     await _flyProductToCart(buttonContext, widget.product, cartFlightTarget);
-    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+    if (!mounted) return;
+    if (ModalRoute.of(context)?.isCurrent != true) {
+      setState(() => adding = false);
+      return;
+    }
     navigator.pop();
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
@@ -3774,7 +3858,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('A little closer', style: TextStyle(fontSize: 15)),
+      title: const Text('Product details', style: TextStyle(fontSize: 16)),
       actions: [
         CartButton(
           controller: widget.controller,
@@ -3830,7 +3914,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         const Divider(),
                         const SizedBox(height: 18),
                         const Text(
-                          'A little comfort in every order',
+                          'About this item',
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
@@ -3841,43 +3925,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           widget.product.description,
                           style: const TextStyle(
                             color: AppColors.secondaryText,
-                            height: 1.9,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 28),
-                        const Text(
-                          'How many happy moments?',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        QuantityPicker(
-                          quantity: quantity,
-                          onDecrease: quantity > 1
-                              ? () => setState(() => quantity--)
-                              : null,
-                          onIncrease: () => setState(() => quantity++),
-                        ),
-                        const SizedBox(height: 28),
-                        SizedBox(
-                          width: double.infinity,
-                          child: Builder(
-                            builder: (buttonContext) => FilledButton.icon(
-                              key: const Key('details-add-to-cart'),
-                              onPressed: adding
-                                  ? null
-                                  : () => addToCart(buttonContext),
-                              icon: const Icon(
-                                Icons.shopping_bag_outlined,
-                                size: 18,
-                              ),
-                              label: Text(
-                                'Add to bag • ${pesos(widget.product.price * quantity)}',
-                              ),
-                            ),
+                            height: 1.7,
+                            fontSize: 14,
                           ),
                         ),
                         const SizedBox(height: 18),
@@ -3904,6 +3953,65 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                       ],
                     ),
                   ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    ),
+    bottomNavigationBar: Material(
+      color: AppColors.surface,
+      child: SafeArea(
+        top: false,
+        child: ContentWidth(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final picker = Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 16,
+                children: [
+                  const Text(
+                    'Quantity',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  QuantityPicker(
+                    quantity: quantity,
+                    onDecrease: quantity > 1 && !adding
+                        ? () => setState(() => quantity--)
+                        : null,
+                    onIncrease: () {
+                      if (!adding) setState(() => quantity++);
+                    },
+                  ),
+                ],
+              );
+              final button = Builder(
+                builder: (buttonContext) => FilledButton.icon(
+                  key: const Key('details-add-to-cart'),
+                  onPressed: adding ? null : () => addToCart(buttonContext),
+                  icon: Icon(
+                    adding ? Icons.check : Icons.shopping_bag_outlined,
+                    size: 18,
+                  ),
+                  label: Text(
+                    adding
+                        ? 'Added to bag'
+                        : 'Add to bag • ${pesos(widget.product.price * quantity)}',
+                  ),
+                ),
+              );
+              if (constraints.maxWidth >= 650) {
+                return Row(children: [picker, const Spacer(), button]);
+              }
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  picker,
+                  const SizedBox(height: 10),
+                  SizedBox(width: double.infinity, child: button),
                 ],
               );
             },
@@ -3967,6 +4075,7 @@ class _CartScreenState extends State<CartScreen> {
               slivers: [
                 SliverToBoxAdapter(
                   child: ContentWidth(
+                    maxWidth: 760,
                     child: Padding(
                       padding: const EdgeInsets.only(top: 28, bottom: 24),
                       child: Column(
@@ -3974,10 +4083,7 @@ class _CartScreenState extends State<CartScreen> {
                         children: [
                           const Eyebrow('Good things in the bag'),
                           const SizedBox(height: 10),
-                          Text(
-                            'A craving, well curated.',
-                            style: displayStyle(32),
-                          ),
+                          Text('Review your items.', style: displayStyle(28)),
                           const SizedBox(height: 10),
                           Text(
                             '$itemCount ${itemCount == 1 ? 'item' : 'items'} to brighten your day.',
@@ -4012,10 +4118,12 @@ class _CartScreenState extends State<CartScreen> {
               color: AppColors.surface,
               child: SafeArea(
                 child: ContentWidth(
+                  maxWidth: 760,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 20),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Wrap(
                           alignment: WrapAlignment.spaceBetween,
@@ -4072,6 +4180,23 @@ class _CartRow extends StatelessWidget {
   final CartItem item;
   final ShopController controller;
 
+  void removeWithUndo(BuildContext context) {
+    if (controller.placingOrder) return;
+    controller.remove(item.product);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('${item.product.name} removed from your bag.'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () =>
+              controller.addToCart(item.product, quantity: item.quantity),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(14),
@@ -4083,6 +4208,7 @@ class _CartRow extends StatelessWidget {
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 450;
         return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -4130,7 +4256,7 @@ class _CartRow extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: 'Remove ${item.product.name}',
-                  onPressed: () => controller.remove(item.product),
+                  onPressed: () => removeWithUndo(context),
                   icon: const Icon(
                     Icons.close,
                     size: 18,
@@ -4148,7 +4274,9 @@ class _CartRow extends StatelessWidget {
               children: [
                 QuantityPicker(
                   quantity: item.quantity,
-                  onDecrease: () => controller.decrease(item.product),
+                  onDecrease: () => item.quantity == 1
+                      ? removeWithUndo(context)
+                      : controller.decrease(item.product),
                   onIncrease: () => controller.addToCart(item.product),
                 ),
                 Text(
@@ -4200,7 +4328,31 @@ class _OrderHistoryContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: controller,
-    builder: (context, _) => controller.orders.isEmpty
+    builder: (context, _) =>
+        controller.loadingOrders && controller.orders.isEmpty
+        ? const Center(
+            child: CircularProgressIndicator(semanticsLabel: 'Loading orders'),
+          )
+        : controller.historyError != null && controller.orders.isEmpty
+        ? Center(
+            child: SingleChildScrollView(
+              child: EmptyState(
+                icon: Icons.cloud_off_outlined,
+                title: 'Orders are unavailable.',
+                message: controller.historyError!,
+                action: OutlinedButton(
+                  key: const Key('retry-order-history'),
+                  onPressed: () => unawaited(
+                    controller
+                        .restoreOrders(retry: true)
+                        .catchError((Object _) {}),
+                  ),
+                  child: const Text('Try again'),
+                ),
+              ),
+            ),
+          )
+        : controller.orders.isEmpty
         ? Center(
             child: SingleChildScrollView(
               child: EmptyState(
@@ -4246,6 +4398,17 @@ class _OrderHistoryContent extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              if (index == 0 &&
+                                  controller.historyError != null) ...[
+                                Text(
+                                  controller.historyError!,
+                                  style: const TextStyle(
+                                    color: AppColors.secondaryText,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
                               Row(
                                 children: [
                                   const Icon(
@@ -4359,10 +4522,9 @@ class DeliveryLocationService {
       return null;
     }
     try {
-      final matches = await Geocoding().placemarkFromCoordinates(
-        point.latitude,
-        point.longitude,
-      );
+      final matches = await Geocoding()
+          .placemarkFromCoordinates(point.latitude, point.longitude)
+          .timeout(const Duration(seconds: 6));
       if (matches.isEmpty) return null;
       final place = matches.first;
       final parts = [
@@ -4449,11 +4611,10 @@ class _CafeMap extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
             child: InkWell(
               borderRadius: BorderRadius.circular(6),
-              onTap: () async {
-                await launchUrl(
-                  Uri.parse('https://www.openstreetmap.org/copyright'),
-                );
-              },
+              onTap: () => openCafeLink(
+                context,
+                Uri.parse('https://www.openstreetmap.org/copyright'),
+              ),
               child: const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                 child: Text(
@@ -4492,6 +4653,7 @@ class _DeliveryMapPickerState extends State<DeliveryMapPicker> {
   bool mapReady = false;
   bool locating = false;
   bool resolving = false;
+  int locationRequest = 0;
   String? error;
 
   @override
@@ -4507,37 +4669,52 @@ class _DeliveryMapPickerState extends State<DeliveryMapPicker> {
 
   @override
   void dispose() {
+    locationRequest++;
     mapController.dispose();
     super.dispose();
   }
 
   Future<void> locate() async {
-    if (locating) return;
+    if (locating || resolving) return;
+    final request = ++locationRequest;
     setState(() {
       locating = true;
       error = null;
     });
     try {
       final location = await widget.locationService.currentLocation();
-      if (!mounted) return;
+      if (!mounted || request != locationRequest) return;
       setState(() => pin = location);
       if (mapReady) mapController.move(location, 17);
-    } catch (_) {
-      if (mounted) {
+    } catch (failure) {
+      if (mounted && request == locationRequest) {
         setState(
-          () => error = 'Could not use GPS. Check location access or place the pin on the map.',
+          () => error = failure is StateError
+              ? '${failure.message} You can also tap the map.'
+              : failure is TimeoutException
+              ? 'GPS took too long. Try again or tap the map.'
+              : 'Could not use GPS. Allow location access or tap the map.',
         );
       }
     } finally {
-      if (mounted) setState(() => locating = false);
+      if (mounted && request == locationRequest) {
+        setState(() => locating = false);
+      }
     }
   }
 
   Future<void> confirm() async {
-    if (pin == null || resolving) return;
+    if (pin == null || resolving || locating) return;
     setState(() => resolving = true);
     final selected = pin!;
-    final suggestedAddress = await widget.locationService.addressFor(selected);
+    String? suggestedAddress;
+    try {
+      suggestedAddress = await widget.locationService
+          .addressFor(selected)
+          .timeout(const Duration(seconds: 6));
+    } catch (_) {
+      // Keep the chosen destination even if the address lookup is unavailable.
+    }
     if (!mounted) return;
     Navigator.of(context)
         .pop(DeliveryLocationSelection(selected, suggestedAddress));
@@ -4561,11 +4738,18 @@ class _DeliveryMapPickerState extends State<DeliveryMapPicker> {
               pin: pin,
               controller: mapController,
               zoom: pin == null ? 13.5 : 16,
-              onReady: () => mapReady = true,
-              onTap: (point) => setState(() {
-                pin = point;
-                error = null;
-              }),
+              onReady: () {
+                mapReady = true;
+                if (pin != null) mapController.move(pin!, 17);
+              },
+              onTap: resolving
+                  ? null
+                  : (point) => setState(() {
+                      locationRequest++;
+                      locating = false;
+                      pin = point;
+                      error = null;
+                    }),
             ),
             Positioned(
               top: 16,
@@ -4605,64 +4789,74 @@ class _DeliveryMapPickerState extends State<DeliveryMapPicker> {
         child: Center(
           heightFactor: 1,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    pin == null
-                        ? 'Place a pin, or use your current location.'
-                        : 'Pin: ${pin!.latitude.toStringAsFixed(5)}, ${pin!.longitude.toStringAsFixed(5)}',
-                    key: const Key('selected-delivery-pin'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12, color: AppColors.ink),
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 8),
+            constraints: BoxConstraints(
+              maxWidth: 640,
+              maxHeight: MediaQuery.sizeOf(context).height * .45,
+            ),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     Text(
-                      error!,
+                      pin == null
+                          ? 'Place a pin, or use your current location.'
+                          : 'Pin: ${pin!.latitude.toStringAsFixed(5)}, ${pin!.longitude.toStringAsFixed(5)}',
+                      key: const Key('selected-delivery-pin'),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        color: AppColors.action,
                         fontSize: 12,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    if (error != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        error!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: AppColors.action,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      key: const Key('map-use-current-location'),
+                      onPressed: locating || resolving ? null : locate,
+                      icon: locating
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.my_location_outlined, size: 18),
+                      label: Text(locating ? 'Locating...' : 'Use my location'),
+                    ),
+                    const SizedBox(height: 10),
+                    FilledButton.icon(
+                      key: const Key('confirm-delivery-pin'),
+                      onPressed: pin == null || resolving || locating
+                          ? null
+                          : confirm,
+                      icon: resolving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.white,
+                              ),
+                            )
+                          : const Icon(Icons.check, size: 18),
+                      label: Text(
+                        resolving ? 'Finding address...' : 'Use this pin',
                       ),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    key: const Key('map-use-current-location'),
-                    onPressed: locating ? null : locate,
-                    icon: locating
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.my_location_outlined, size: 18),
-                    label: Text(locating ? 'Locating...' : 'Use my location'),
-                  ),
-                  const SizedBox(height: 10),
-                  FilledButton.icon(
-                    key: const Key('confirm-delivery-pin'),
-                    onPressed: pin == null || resolving ? null : confirm,
-                    icon: resolving
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.white,
-                            ),
-                          )
-                        : const Icon(Icons.check, size: 18),
-                    label: Text(
-                      resolving ? 'Finding address...' : 'Use this pin',
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -4691,9 +4885,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final mobile = TextEditingController();
   final address = TextEditingController();
   final notes = TextEditingController();
+  String? suggestedAddress;
   LatLng? deliveryPin;
   PaymentMethod payment = PaymentMethod.cash;
   bool busy = false;
+  bool attemptedSubmit = false;
 
   @override
   void dispose() {
@@ -4705,14 +4901,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   String? validateMobile(String? value) {
-    final cleaned = (value ?? '').replaceAll(RegExp(r'[\s-]'), '');
-    if (!RegExp(r'^(09\d{9}|\+639\d{9})$').hasMatch(cleaned)) {
-      return 'Enter a valid PH mobile number';
-    }
-    return null;
+    return CheckoutValidation.mobile(value);
   }
 
   Future<void> chooseLocation({bool useGps = false}) async {
+    if (busy) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     final selected = await Navigator.of(context)
         .push<DeliveryLocationSelection>(
           MaterialPageRoute(
@@ -4725,14 +4919,28 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         );
     if (!mounted || selected == null) return;
     setState(() => deliveryPin = selected.point);
-    if (address.text.trim().isEmpty &&
+    if ((address.text.trim().isEmpty || address.text == suggestedAddress) &&
         selected.suggestedAddress?.isNotEmpty == true) {
       address.text = selected.suggestedAddress!;
+      suggestedAddress = selected.suggestedAddress;
     }
   }
 
   Future<void> placeOrder() async {
-    if (busy || !form.currentState!.validate()) return;
+    if (busy) return;
+    setState(() => attemptedSubmit = true);
+    final invalid = form.currentState!.validateGranularly();
+    if (invalid.isNotEmpty) {
+      await Scrollable.ensureVisible(
+        invalid.first.context,
+        alignment: .15,
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 250),
+      );
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => busy = true);
     try {
       if (payment == PaymentMethod.digital) {
@@ -4755,7 +4963,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         deliveryLatitude: deliveryPin?.latitude,
         deliveryLongitude: deliveryPin?.longitude,
       );
-      if (!mounted || order == null) return;
+      if (!mounted) return;
+      if (order == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Check your bag and delivery details before placing an order.',
+            ),
+          ),
+        );
+        return;
+      }
       Navigator.of(context).pushAndRemoveUntil<void>(
         MaterialPageRoute<void>(
           settings: const RouteSettings(
@@ -4779,220 +4997,259 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Checkout', style: TextStyle(fontSize: 16)),
-    ),
-    body: SingleChildScrollView(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
-            child: Form(
-              key: form,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Eyebrow('Order details'),
-                  const SizedBox(height: 10),
-                  Text('Almost yours.', style: displayStyle(32)),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Tell us where to bring your order and how to reach you.',
-                    style: TextStyle(
-                      color: AppColors.secondaryText,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  TextFormField(
-                    key: const Key('customer-name'),
-                    controller: name,
-                    textCapitalization: TextCapitalization.words,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Full name *',
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                    validator: (value) => (value ?? '').trim().length < 2
-                        ? 'Enter your name'
-                        : null,
-                  ),
-                  const SizedBox(height: 18),
-                  TextFormField(
-                    key: const Key('customer-mobile'),
-                    controller: mobile,
-                    keyboardType: TextInputType.phone,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Mobile number *',
-                      hintText: '09XX XXX XXXX',
-                      prefixIcon: Icon(Icons.phone_outlined),
-                    ),
-                    validator: validateMobile,
-                  ),
-                  const SizedBox(height: 18),
-                  TextFormField(
-                    key: const Key('delivery-address'),
-                    controller: address,
-                    maxLines: 2,
-                    textCapitalization: TextCapitalization.words,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Delivery address *',
-                      hintText: 'House number, street, barangay, city',
-                      prefixIcon: Icon(Icons.location_on_outlined),
-                      alignLabelWithHint: true,
-                    ),
-                    validator: (value) => (value ?? '').trim().length < 8
-                        ? 'Enter your delivery address'
-                        : null,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Check the street and house number if you use GPS.',
-                    style: TextStyle(
-                      color: AppColors.secondaryText,
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 8,
-                    children: [
-                      OutlinedButton.icon(
-                        key: const Key('use-gps-address'),
-                        onPressed: () => chooseLocation(useGps: true),
-                        icon: const Icon(Icons.my_location_outlined, size: 18),
-                        label: const Text('Use GPS'),
-                      ),
-                      OutlinedButton.icon(
-                        key: const Key('choose-map-address'),
-                        onPressed: chooseLocation,
-                        icon: const Icon(Icons.map_outlined, size: 18),
-                        label: Text(
-                          deliveryPin == null ? 'Choose on map' : 'Move pin',
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (deliveryPin != null) ...[
+  Widget build(BuildContext context) => PopScope(
+    canPop: !busy,
+    child: Scaffold(
+      appBar: AppBar(
+        title: const Text('Checkout', style: TextStyle(fontSize: 16)),
+      ),
+      body: SingleChildScrollView(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
+              child: Form(
+                key: form,
+                autovalidateMode: attemptedSubmit
+                    ? AutovalidateMode.onUserInteraction
+                    : AutovalidateMode.disabled,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Eyebrow('Order details'),
                     const SizedBox(height: 10),
-                    Text(
-                      'Delivery pin: ${deliveryPin!.latitude.toStringAsFixed(5)}, ${deliveryPin!.longitude.toStringAsFixed(5)}',
-                      key: const Key('checkout-delivery-pin'),
-                      style: const TextStyle(
-                        color: AppColors.teal,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                    Text('Almost yours.', style: displayStyle(32)),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Tell us where to bring your order and how to reach you.',
+                      style: TextStyle(
+                        color: AppColors.secondaryText,
+                        height: 1.5,
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 18),
-                  TextFormField(
-                    key: const Key('customer-notes'),
-                    controller: notes,
-                    maxLines: 3,
-                    maxLength: 200,
-                    decoration: const InputDecoration(
-                      labelText: 'Delivery notes (optional)',
-                      alignLabelWithHint: true,
-                      hintText: 'Anything the cafe should know?',
+                    const SizedBox(height: 28),
+                    const Eyebrow('1 · Contact details'),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: const Key('customer-name'),
+                      controller: name,
+                      enabled: !busy,
+                      autofillHints: const [AutofillHints.name],
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Full name *',
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
+                      validator: CheckoutValidation.name,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Eyebrow('Payment method'),
-                  const SizedBox(height: 12),
-                  _PaymentChoice(
-                    key: const Key('payment-cash'),
-                    title: 'Cash on delivery',
-                    subtitle: 'Pay when your order arrives',
-                    icon: Icons.payments_outlined,
-                    selected: payment == PaymentMethod.cash,
-                    onTap: () => setState(() => payment = PaymentMethod.cash),
-                  ),
-                  const SizedBox(height: 10),
-                  _PaymentChoice(
-                    key: const Key('payment-digital'),
-                    title: 'GCash',
-                    subtitle: 'Preview a wallet payment; no money is taken',
-                    icon: Icons.account_balance_wallet_outlined,
-                    selected: payment == PaymentMethod.digital,
-                    onTap: () =>
-                        setState(() => payment = PaymentMethod.digital),
-                  ),
-                  const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: AppColors.border),
+                    const SizedBox(height: 18),
+                    TextFormField(
+                      key: const Key('customer-mobile'),
+                      controller: mobile,
+                      enabled: !busy,
+                      autofillHints: const [
+                        AutofillHints.telephoneNumberNational,
+                      ],
+                      keyboardType: TextInputType.phone,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Mobile number *',
+                        hintText: '09XX XXX XXXX',
+                        prefixIcon: Icon(Icons.phone_outlined),
+                      ),
+                      validator: validateMobile,
                     ),
-                    child: Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      spacing: 16,
+                    const SizedBox(height: 24),
+                    const Eyebrow('2 · Delivery address'),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      key: const Key('delivery-address'),
+                      controller: address,
+                      enabled: !busy,
+                      autofillHints: const [AutofillHints.fullStreetAddress],
+                      maxLines: 2,
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        labelText: 'Delivery address *',
+                        hintText: 'House number, street, barangay, city',
+                        prefixIcon: Icon(Icons.location_on_outlined),
+                        alignLabelWithHint: true,
+                      ),
+                      validator: CheckoutValidation.address,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'GPS is optional. Always include your house number, street and city.',
+                      style: TextStyle(
+                        color: AppColors.secondaryText,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
                       runSpacing: 8,
                       children: [
-                        Text(
-                          '${widget.controller.cartCount} ${widget.controller.cartCount == 1 ? 'item' : 'items'} · Delivery',
+                        OutlinedButton.icon(
+                          key: const Key('use-gps-address'),
+                          onPressed: () => chooseLocation(useGps: true),
+                          icon: const Icon(
+                            Icons.my_location_outlined,
+                            size: 18,
+                          ),
+                          label: const Text('Use GPS'),
                         ),
-                        Text(
-                          pesos(widget.controller.total),
-                          key: const Key('checkout-total'),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 18,
+                        OutlinedButton.icon(
+                          key: const Key('choose-map-address'),
+                          onPressed: chooseLocation,
+                          icon: const Icon(Icons.map_outlined, size: 18),
+                          label: Text(
+                            deliveryPin == null ? 'Choose on map' : 'Move pin',
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'No order will be sent to the cafe, and no payment will be taken.',
-                    style: TextStyle(
-                      color: AppColors.secondaryText,
-                      fontSize: 12,
+                    if (deliveryPin != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        'Delivery pin: ${deliveryPin!.latitude.toStringAsFixed(5)}, ${deliveryPin!.longitude.toStringAsFixed(5)}',
+                        key: const Key('checkout-delivery-pin'),
+                        style: const TextStyle(
+                          color: AppColors.teal,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          key: const Key('remove-delivery-pin'),
+                          onPressed: busy
+                              ? null
+                              : () => setState(() => deliveryPin = null),
+                          icon: const Icon(Icons.close, size: 16),
+                          label: const Text('Remove pin'),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    TextFormField(
+                      key: const Key('customer-notes'),
+                      controller: notes,
+                      enabled: !busy,
+                      maxLines: 2,
+                      maxLength: 200,
+                      decoration: const InputDecoration(
+                        labelText: 'Delivery notes (optional)',
+                        alignLabelWithHint: true,
+                        hintText: 'Anything the cafe should know?',
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    const Eyebrow('3 · Payment method'),
+                    const SizedBox(height: 12),
+                    _PaymentChoice(
+                      key: const Key('payment-cash'),
+                      title: 'Cash on delivery',
+                      subtitle: 'Pay when your order arrives',
+                      icon: Icons.payments_outlined,
+                      selected: payment == PaymentMethod.cash,
+                      onTap: () {
+                        if (!busy) setState(() => payment = PaymentMethod.cash);
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _PaymentChoice(
+                      key: const Key('payment-digital'),
+                      title: 'GCash',
+                      subtitle: 'Preview a wallet payment; no money is taken',
+                      icon: Icons.account_balance_wallet_outlined,
+                      selected: payment == PaymentMethod.digital,
+                      onTap: () {
+                        if (!busy) {
+                          setState(() => payment = PaymentMethod.digital);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'No order will be sent to the cafe, and no payment will be taken.',
+                      style: TextStyle(
+                        color: AppColors.secondaryText,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
-    ),
-    bottomNavigationBar: ColoredBox(
-      color: AppColors.surface,
-      child: SafeArea(
-        top: false,
-        child: Center(
-          heightFactor: 1,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  key: const Key('place-order'),
-                  onPressed: busy ? null : placeOrder,
-                  icon: busy
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.arrow_forward, size: 18),
-                  iconAlignment: IconAlignment.end,
-                  label: Text(
-                    payment == PaymentMethod.cash
-                        ? 'Place order'
-                        : 'Continue to GCash',
-                  ),
+      bottomNavigationBar: ColoredBox(
+        color: AppColors.surface,
+        child: SafeArea(
+          top: false,
+          child: Center(
+            heightFactor: 1,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      spacing: 16,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          '${widget.controller.cartCount} ${widget.controller.cartCount == 1 ? 'item' : 'items'} · Delivery',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryText,
+                          ),
+                        ),
+                        Text(
+                          pesos(widget.controller.total),
+                          key: const Key('checkout-total'),
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        key: const Key('place-order'),
+                        onPressed: busy ? null : placeOrder,
+                        icon: busy
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.arrow_forward, size: 18),
+                        iconAlignment: IconAlignment.end,
+                        label: Text(
+                          payment == PaymentMethod.cash
+                              ? 'Place order'
+                              : 'Continue to GCash',
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -5019,50 +5276,54 @@ class _PaymentChoice extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: selected ? AppColors.softTeal : AppColors.surface,
-    borderRadius: BorderRadius.circular(16),
-    child: InkWell(
-      onTap: onTap,
+  Widget build(BuildContext context) => Semantics(
+    selected: selected,
+    inMutuallyExclusiveGroup: true,
+    child: Material(
+      color: selected ? AppColors.softTeal : AppColors.surface,
       borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected ? AppColors.teal : AppColors.border,
-            width: selected ? 2 : 1,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected ? AppColors.teal : AppColors.border,
+              width: selected ? 2 : 1,
+            ),
           ),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: AppColors.dark),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: AppColors.secondaryText,
-                      fontSize: 12,
+          child: Row(
+            children: [
+              Icon(icon, color: AppColors.dark),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: AppColors.secondaryText,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Icon(
-              selected ? Icons.check_circle : Icons.circle_outlined,
-              color: selected ? AppColors.teal : AppColors.secondaryText,
-            ),
-          ],
+              const SizedBox(width: 8),
+              Icon(
+                selected ? Icons.check_circle : Icons.circle_outlined,
+                color: selected ? AppColors.teal : AppColors.secondaryText,
+              ),
+            ],
+          ),
         ),
       ),
     ),
@@ -5310,8 +5571,8 @@ class _DemoPaymentScreenState extends State<DemoPaymentScreen> {
                   processing
                       ? 'Processing payment'
                       : success
-                      ? 'Payment successful'
-                      : 'Payment failed',
+                      ? 'Payment preview complete'
+                      : 'Payment preview failed',
                   key: processing
                       ? const Key('payment-processing')
                       : success
@@ -5328,7 +5589,7 @@ class _DemoPaymentScreenState extends State<DemoPaymentScreen> {
               const SizedBox(height: 8),
               Text(
                 processing
-                    ? 'Please wait a moment.'
+                    ? 'Simulating a payment. No money will be taken.'
                     : success
                     ? 'Your Smooch Cafe order is ready to confirm.'
                     : 'Your bag is safe. You can try again or return to checkout.',
@@ -5340,7 +5601,7 @@ class _DemoPaymentScreenState extends State<DemoPaymentScreen> {
               ),
               const SizedBox(height: 22),
               const Divider(),
-              paymentRow(success ? 'Paid to' : 'Merchant', 'Smooch Cafe'),
+              paymentRow('Merchant', 'Smooch Cafe'),
               paymentRow('Amount', pesos(widget.amount), total: true),
             ],
           ),
@@ -5406,11 +5667,11 @@ class _DemoPaymentScreenState extends State<DemoPaymentScreen> {
                       children: [
                         Text(
                           switch (stage) {
-                            _DemoPaymentStage.review => 'YOU ARE ABOUT TO PAY',
+                            _DemoPaymentStage.review => 'PAYMENT PREVIEW',
                             _DemoPaymentStage.processing =>
-                              'PROCESSING PAYMENT',
-                            _DemoPaymentStage.success => 'PAYMENT COMPLETE',
-                            _DemoPaymentStage.failed => 'PAYMENT UNSUCCESSFUL',
+                              'SIMULATING PAYMENT',
+                            _DemoPaymentStage.success => 'PREVIEW COMPLETE',
+                            _DemoPaymentStage.failed => 'PREVIEW UNSUCCESSFUL',
                           },
                           style: const TextStyle(
                             color: Color(0xFFD6E5FF),
@@ -5525,7 +5786,7 @@ class _DemoPaymentScreenState extends State<DemoPaymentScreen> {
                       ),
                       child: Text(switch (stage) {
                         _DemoPaymentStage.review =>
-                          'Pay ${pesos(widget.amount)}',
+                          'Simulate payment · ${pesos(widget.amount)}',
                         _DemoPaymentStage.processing => 'Processing…',
                         _DemoPaymentStage.success => 'Continue to order',
                         _DemoPaymentStage.failed => 'Try again',
@@ -5675,7 +5936,7 @@ class _OrderTrackingState extends State<OrderTracking>
         : const Duration(milliseconds: 320);
     if (widget.compact) {
       return Semantics(
-        label: 'Estimated order status: ${stage.label}',
+        label: 'Simulated order status: ${stage.label}',
         child: AnimatedSwitcher(
           duration: motion,
           child: Container(
@@ -5688,7 +5949,7 @@ class _OrderTrackingState extends State<OrderTracking>
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              stage.label,
+              '${stage.label} · Simulation',
               key: Key('order-stage-${widget.order.reference}'),
               style: const TextStyle(
                 color: AppColors.ink,
@@ -5722,7 +5983,7 @@ class _OrderTrackingState extends State<OrderTracking>
           ),
           const SizedBox(height: 4),
           const Text(
-            'Estimated progress · updates every 10 seconds',
+            'Simulated progress · updates every 10 seconds. No live rider tracking.',
             style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
           ),
           const SizedBox(height: 18),
@@ -5843,7 +6104,10 @@ class OrderConfirmationScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Order confirmation', style: TextStyle(fontSize: 16)),
+      title: Text(
+        fromHistory ? 'Order details' : 'Order confirmation',
+        style: const TextStyle(fontSize: 16),
+      ),
       leading: IconButton(
         tooltip: fromHistory ? 'Back to orders' : 'Back to menu',
         onPressed: () => _continueShopping(context),
@@ -5878,16 +6142,16 @@ class OrderConfirmationScreen extends StatelessWidget {
                 Semantics(
                   liveRegion: true,
                   child: Text(
-                    'Order placed.',
+                    fromHistory ? 'Your saved order.' : 'Order placed.',
                     style: displayStyle(32),
                     textAlign: TextAlign.center,
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'Thanks for a little Smooch. Your order details are below.',
+                Text(
+                  fromHistory ? orderDate(order.createdAt) : 'Saved on this device. Follow the simulated progress below.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppColors.secondaryText,
                     fontSize: 14,
                     height: 1.6,
@@ -6135,6 +6399,7 @@ class CafeSection extends StatelessWidget {
             child: Image.asset(
               'assets/images/landing1.png',
               fit: BoxFit.contain,
+              semanticLabel: 'Smooch Cafe drinks and food',
             ),
           ),
         ),
@@ -6168,11 +6433,15 @@ class CafeSection extends StatelessWidget {
         icon: Icons.phone_outlined,
         title: 'Give us a call',
         text: '(0965) 760 8290',
+        link: 'tel:+639657608290',
+        actionLabel: 'Call cafe',
       ),
       const _CafeInfo(
         icon: Icons.mail_outline,
         title: 'Say hello',
         text: 'smoochcafe25@gmail.com',
+        link: 'mailto:smoochcafe25@gmail.com',
+        actionLabel: 'Email cafe',
       ),
       const SizedBox(height: 24),
       FilledButton.icon(
@@ -6189,10 +6458,14 @@ class _CafeInfo extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.text,
+    this.link,
+    this.actionLabel,
   });
   final IconData icon;
   final String title;
   final String text;
+  final String? link;
+  final String? actionLabel;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -6225,6 +6498,16 @@ class _CafeInfo extends StatelessWidget {
             ],
           ),
         ),
+        if (link != null)
+          IconButton(
+            tooltip: actionLabel,
+            onPressed: () => openCafeLink(context, Uri.parse(link!)),
+            icon: const Icon(
+              Icons.open_in_new,
+              size: 20,
+              color: AppColors.teal,
+            ),
+          ),
       ],
     ),
   );
