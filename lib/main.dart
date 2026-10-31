@@ -6,6 +6,7 @@ import 'dart:ui' show FontFeature, PlatformDispatcher, PointerDeviceKind;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widget_previews.dart';
 import 'package:flutter_map/flutter_map.dart'
@@ -58,6 +59,22 @@ abstract final class AppColors {
   static const action = Color(0xFFC23F38);
   static const softTeal = Color(0xFFE8F0EC);
   static const softCoral = Color(0xFFFBE9E5);
+  static const oat = Color(0xFFEEE5D6);
+  static const gold = Color(0xFFE9C587);
+}
+
+abstract final class CafeMotion {
+  static const quick = Duration(milliseconds: 160);
+  static const standard = Duration(milliseconds: 320);
+  static const entrance = Duration(milliseconds: 640);
+  static const spring = SpringDescription(mass: 1, stiffness: 380, damping: 27);
+  static Duration of(BuildContext context, Duration duration) =>
+      MediaQuery.disableAnimationsOf(context) ? Duration.zero : duration;
+}
+
+abstract final class CafeShape {
+  static const card = 22.0;
+  static const panel = 28.0;
 }
 
 abstract final class AppTheme {
@@ -2069,6 +2086,366 @@ class _HorizontalScrollFadeState extends State<HorizontalScrollFade> {
       );
 }
 
+/// Local transform feedback that leaves the child's tap and focus behavior intact.
+class CafePress extends StatefulWidget {
+  const CafePress({
+    super.key,
+    required this.child,
+    this.lift = false,
+    this.enabled = true,
+  });
+  final Widget child;
+  final bool lift;
+  final bool enabled;
+  @override
+  State<CafePress> createState() => _CafePressState();
+}
+
+class _CafePressState extends State<CafePress>
+    with SingleTickerProviderStateMixin {
+  late final motion = AnimationController.unbounded(vsync: this, value: 1);
+  bool hovering = false;
+  bool pressing = false;
+  bool reduced = false;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    reduced = MediaQuery.disableAnimationsOf(context);
+    if (reduced) {
+      motion.stop();
+      motion.value = 1;
+    }
+  }
+
+  void settle() {
+    if (!widget.enabled || reduced) return;
+    final target = pressing
+        ? .975
+        : hovering && widget.lift
+        ? 1.012
+        : 1.0;
+    motion.animateWith(
+      SpringSimulation(
+        CafeMotion.spring,
+        motion.value,
+        target,
+        motion.velocity,
+      ),
+    );
+  }
+
+  @override
+  void didUpdateWidget(CafePress oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.enabled) {
+      pressing = false;
+      motion.stop();
+      motion.value = 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    motion.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+    onEnter: (_) {
+      hovering = true;
+      settle();
+    },
+    onExit: (_) {
+      hovering = false;
+      pressing = false;
+      settle();
+    },
+    child: Listener(
+      onPointerDown: (_) {
+        pressing = true;
+        settle();
+      },
+      onPointerUp: (_) {
+        pressing = false;
+        settle();
+      },
+      onPointerCancel: (_) {
+        pressing = false;
+        settle();
+      },
+      child: AnimatedBuilder(
+        animation: motion,
+        child: widget.child,
+        builder: (_, child) => Transform.translate(
+          offset: Offset(
+            0,
+            widget.lift && !reduced
+                ? -math.max(0.0, motion.value - 1) * 160
+                : 0,
+          ),
+          child: Transform.scale(
+            scale: reduced ? 1 : motion.value,
+            child: child,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// A finite entrance; the static subtree is cached throughout the animation.
+class CafeReveal extends StatefulWidget {
+  const CafeReveal({super.key, required this.child, this.delay = 0});
+  final Widget child;
+  final double delay;
+  @override
+  State<CafeReveal> createState() => _CafeRevealState();
+}
+
+class _CafeRevealState extends State<CafeReveal>
+    with SingleTickerProviderStateMixin {
+  late final motion = AnimationController(
+    vsync: this,
+    duration: CafeMotion.entrance,
+  );
+  bool started = false;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      motion.value = 1;
+      started = true;
+    } else if (!started) {
+      started = true;
+      motion.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    motion.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: motion,
+    child: widget.child,
+    builder: (_, child) {
+      final value = Interval(
+        widget.delay.clamp(0.0, .6),
+        1,
+        curve: Curves.easeOutCubic,
+      ).transform(motion.value);
+      return Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+class CafeSuccessSeal extends StatefulWidget {
+  const CafeSuccessSeal({super.key, this.animate = true});
+  final bool animate;
+  @override
+  State<CafeSuccessSeal> createState() => _CafeSuccessSealState();
+}
+
+class _CafeSuccessSealState extends State<CafeSuccessSeal>
+    with SingleTickerProviderStateMixin {
+  late final motion = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 860),
+  );
+  bool started = false;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!widget.animate || MediaQuery.disableAnimationsOf(context)) {
+      motion.value = 1;
+      started = true;
+    } else if (!started) {
+      started = true;
+      motion.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    motion.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: RepaintBoundary(
+      child: SizedBox(
+        key: const Key('order-success-seal'),
+        width: 104,
+        height: 104,
+        child: AnimatedBuilder(
+          animation: motion,
+          builder: (_, _) =>
+              CustomPaint(painter: _SuccessSealPainter(motion.value)),
+        ),
+      ),
+    ),
+  );
+}
+
+class _SuccessSealPainter extends CustomPainter {
+  const _SuccessSealPainter(this.progress);
+  final double progress;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final scale = size.width / 104;
+    canvas.save();
+    canvas.scale(scale);
+    final center = const Offset(52, 52);
+    final settle = const Interval(
+      0,
+      .65,
+      curve: Curves.easeOutBack,
+    ).transform(progress);
+    canvas.drawCircle(center, 41 * settle, Paint()..color = AppColors.softTeal);
+    canvas.drawCircle(
+      center,
+      49,
+      Paint()
+        ..color = AppColors.border
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: 49),
+      -math.pi / 2,
+      2 * math.pi * Curves.easeOutCubic.transform(progress),
+      false,
+      Paint()
+        ..color = AppColors.teal
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = 2,
+    );
+    final check = Path()
+      ..moveTo(32, 52)
+      ..lineTo(46, 66)
+      ..lineTo(73, 38);
+    final reveal = const Interval(
+      .25,
+      .9,
+      curve: Curves.easeOutCubic,
+    ).transform(progress);
+    final measure = check.computeMetrics().first;
+    canvas.drawPath(
+      measure.extractPath(0, measure.length * reveal),
+      Paint()
+        ..color = AppColors.dark
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_SuccessSealPainter oldDelegate) =>
+      progress != oldDelegate.progress;
+}
+
+class CheckoutStepHeading extends StatelessWidget {
+  const CheckoutStepHeading({
+    super.key,
+    required this.step,
+    required this.title,
+    required this.icon,
+  });
+  final int step;
+  final String title;
+  final IconData icon;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.softTeal,
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(icon, size: 18, color: AppColors.teal),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          ),
+        ),
+        NumericText(
+          '0$step',
+          style: const TextStyle(fontSize: 12, color: AppColors.secondaryText),
+        ),
+      ],
+    ),
+  );
+}
+
+class CafeSectionHeading extends StatelessWidget {
+  const CafeSectionHeading({
+    super.key,
+    required this.eyebrow,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+  });
+  final String eyebrow, title;
+  final String? subtitle;
+  final Widget? trailing;
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Eyebrow(eyebrow),
+      const SizedBox(height: 10),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: displayStyle(
+                MediaQuery.sizeOf(context).width > 900 ? 42 : 32,
+              ),
+            ),
+          ),
+          if (trailing != null) ...[const SizedBox(width: 16), trailing!],
+        ],
+      ),
+      if (subtitle != null) ...[
+        const SizedBox(height: 10),
+        Text(
+          subtitle!,
+          style: const TextStyle(
+            fontSize: 13,
+            height: 1.6,
+            color: AppColors.secondaryText,
+          ),
+        ),
+      ],
+    ],
+  );
+}
+
 class BrandLogo extends StatelessWidget {
   const BrandLogo({super.key, this.width = 125});
   final double width;
@@ -2129,15 +2506,28 @@ class ProductImage extends StatelessWidget {
     super.key,
     required this.product,
     this.fit = BoxFit.cover,
+    this.highResolution = false,
   });
   final Product product;
   final BoxFit fit;
+  final bool highResolution;
 
   @override
   Widget build(BuildContext context) => Image.asset(
     product.image,
+    cacheWidth: highResolution ? 1024 : 640,
     fit: fit,
+    gaplessPlayback: true,
     semanticLabel: product.name,
+    frameBuilder: (context, child, frame, synchronous) =>
+        synchronous || MediaQuery.disableAnimationsOf(context)
+        ? child
+        : AnimatedOpacity(
+            opacity: frame == null ? 0 : 1,
+            duration: CafeMotion.standard,
+            curve: Curves.easeOut,
+            child: child,
+          ),
     errorBuilder: (context, error, trace) => const ColoredBox(
       color: AppColors.softTeal,
       child: Center(
@@ -2571,8 +2961,13 @@ class _StartScreenState extends State<StartScreen>
 
   Future<void> _warmNextImage(int index) async {
     if (!mounted || index >= _warmAssets.length) return;
+    final path = _warmAssets[index];
+    final provider =
+        widget.controller.products.any((product) => product.image == path)
+        ? ResizeImage.resizeIfNeeded(640, null, AssetImage(path))
+        : AssetImage(path);
     await precacheImage(
-      AssetImage(_warmAssets[index]),
+      provider,
       context,
       onError: (Object _, StackTrace? _) {},
     );
@@ -2772,13 +3167,16 @@ class _StartScreenState extends State<StartScreen>
     constraints: const BoxConstraints(maxWidth: 360),
     child: SizedBox(
       width: double.infinity,
-      child: FilledButton.icon(
-        key: const Key('enter-store'),
-        onPressed: _leaving ? null : _openMenu,
-        iconAlignment: IconAlignment.end,
-        icon: const Icon(Icons.arrow_forward),
-        label: const Text('ORDER NOW'),
-        style: FilledButton.styleFrom(minimumSize: const Size(48, 56)),
+      child: CafePress(
+        enabled: !_leaving,
+        child: FilledButton.icon(
+          key: const Key('enter-store'),
+          onPressed: _leaving ? null : _openMenu,
+          iconAlignment: IconAlignment.end,
+          icon: const Icon(Icons.arrow_forward),
+          label: const Text('ORDER NOW'),
+          style: FilledButton.styleFrom(minimumSize: const Size(48, 56)),
+        ),
       ),
     ),
   );
@@ -3164,7 +3562,7 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
                         for (final entry in [
                           'Our menu',
                           'Order history',
-                          'Cafe info',
+                          'Discover',
                         ].asMap().entries)
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -3231,12 +3629,12 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
                                 label: 'Order history',
                               ),
                               NavigationDestination(
-                                icon: Icon(Icons.storefront_outlined),
+                                icon: Icon(Icons.explore_outlined),
                                 selectedIcon: Icon(
-                                  Icons.storefront,
+                                  Icons.explore,
                                   color: AppColors.dark,
                                 ),
-                                label: 'Cafe info',
+                                label: 'Discover',
                               ),
                             ],
                           ),
@@ -3301,6 +3699,7 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
                                       shop.sortBy(value);
                                       resetPosition();
                                     },
+                                    onDiscover: () => selectTab(2),
                                     onSearchAll: () => selectCategory('All'),
                                     onClearSearch: () {
                                       search.clear();
@@ -3373,7 +3772,17 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
                                 top: 24,
                                 bottom: 14,
                               ),
-                              child: CafeSection(onBrowse: () => selectTab(0)),
+                              child: CafeSection(
+                                products: shop.products,
+                                onBrowse: () => selectTab(0),
+                                onCategory: (category) {
+                                  selectTab(0);
+                                  search.clear();
+                                  queryChanged('');
+                                  selectCategory(category);
+                                  resetPosition();
+                                },
+                              ),
                             ),
                           ),
                         ),
@@ -3425,6 +3834,7 @@ class _MenuCategoryPage extends StatelessWidget {
     required this.onSort,
     required this.onSearchAll,
     required this.onClearSearch,
+    required this.onDiscover,
   });
 
   final String category;
@@ -3442,6 +3852,7 @@ class _MenuCategoryPage extends StatelessWidget {
   final ValueChanged<MenuSort> onSort;
   final VoidCallback onSearchAll;
   final VoidCallback onClearSearch;
+  final VoidCallback onDiscover;
 
   @override
   Widget build(BuildContext context) {
@@ -3456,26 +3867,29 @@ class _MenuCategoryPage extends StatelessWidget {
             child: ContentWidth(
               padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
               child: Padding(
-                padding: const EdgeInsets.only(top: 20, bottom: 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Eyebrow('Smooch Cafe · Carmona'),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Made for your cravings.',
-                      style: displayStyle(wide ? 38 : 29),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Your favorite sip. Your next little treat.',
-                      style: TextStyle(
-                        color: AppColors.secondaryText,
-                        fontSize: 14,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
+                padding: const EdgeInsets.only(top: 18, bottom: 24),
+                child: CafeReveal(
+                  child: CafeSectionHeading(
+                    eyebrow: 'SMOOCH CAFE · CARMONA',
+                    title: MediaQuery.textScalerOf(context).scale(14) > 20
+                        ? 'Your menu.'
+                        : 'Good days start here.',
+                    subtitle: MediaQuery.textScalerOf(context).scale(14) > 20
+                        ? null
+                        : 'Your favorite sip. A comforting bite. A little Smooch.',
+                    trailing: wide
+                        ? CafePress(
+                            child: OutlinedButton.icon(
+                              onPressed: onDiscover,
+                              icon: const Icon(
+                                Icons.explore_outlined,
+                                size: 18,
+                              ),
+                              label: const Text('Discover Smooch'),
+                            ),
+                          )
+                        : null,
+                  ),
                 ),
               ),
             ),
@@ -3699,7 +4113,6 @@ class _FeaturedCarousel extends StatelessWidget {
   final PageController pages;
   final int currentPage;
   final ValueChanged<int> onPageChanged;
-
   @override
   Widget build(BuildContext context) {
     final featured = controller.products
@@ -3708,145 +4121,65 @@ class _FeaturedCarousel extends StatelessWidget {
         .toList();
     if (featured.isEmpty) return const SizedBox.shrink();
     final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    final reduced = MediaQuery.disableAnimationsOf(context);
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 760),
+        constraints: const BoxConstraints(maxWidth: 1160),
         child: Padding(
-          padding: const EdgeInsets.only(top: 4, bottom: 18),
+          padding: const EdgeInsets.only(top: 4, bottom: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14),
-                child: Eyebrow('Smooch picks · Swipe to explore'),
+                padding: EdgeInsets.symmetric(horizontal: 18),
+                child: Eyebrow('SMOOCH PICKS · SWIPE TO FIND YOUR FAVORITE'),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               SizedBox(
-                height: 186 * scale.clamp(1, 1.8),
+                height: 224 * scale.clamp(1, 1.8),
                 child: HorizontalScrollFade(
                   child: PageView.builder(
                     key: const Key('featured-carousel'),
                     controller: pages,
                     itemCount: featured.length,
                     onPageChanged: onPageChanged,
-                    itemBuilder: (context, index) {
-                      final product = featured[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 10),
-                        child: Material(
-                          color: AppColors.dark,
-                          borderRadius: BorderRadius.circular(22),
-                          clipBehavior: Clip.antiAlias,
-                          child: InkWell(
-                            key: Key('featured-${product.id}'),
-                            onTap: () {
-                              CafeHaptics.light();
-                              Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                  settings: RouteSettings(
-                                    name: '/details',
-                                    arguments: product.name,
-                                  ),
-                                  builder: (_) => ProductDetailsScreen(
-                                    product: product,
-                                    controller: controller,
-                                  ),
-                                ),
-                              );
-                            },
-                            child: LayoutBuilder(
-                              builder: (context, cardConstraints) {
-                                final compact = cardConstraints.maxWidth < 310;
-                                return Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Expanded(
-                                      flex: compact ? 64 : 61,
-                                      child: Padding(
-                                        padding: EdgeInsets.all(
-                                          compact ? 14 : 20,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            const Text(
-                                              'CAFE PICK',
-                                              style: TextStyle(
-                                                color: AppColors.muted,
-                                                fontSize: 10,
-                                                letterSpacing: 1.5,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                            const Spacer(),
-                                            Text(
-                                              product.name,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                color: AppColors.white,
-                                                fontSize: 19,
-                                                fontWeight: FontWeight.w700,
-                                                height: 1.2,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 10),
-                                            Wrap(
-                                              alignment:
-                                                  WrapAlignment.spaceBetween,
-                                              crossAxisAlignment:
-                                                  WrapCrossAlignment.center,
-                                              spacing: 8,
-                                              runSpacing: 4,
-                                              children: [
-                                                NumericText(
-                                                  pesos(product.price),
-                                                  style: const TextStyle(
-                                                    color: AppColors.white,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                                ),
-                                                _AnimatedAddButton(
-                                                  key: ValueKey(
-                                                    'featured-${product.id}',
-                                                  ),
-                                                  product: product,
-                                                  controller: controller,
-                                                  iconOnly: true,
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      flex: compact ? 36 : 39,
-                                      child: ProductImage(product: product),
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                          ),
+                    itemBuilder: (context, index) => AnimatedBuilder(
+                      animation: pages,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: _FeaturedCard(
+                          product: featured[index],
+                          controller: controller,
+                          index: index,
                         ),
-                      );
-                    },
+                      ),
+                      builder: (context, child) {
+                        final page =
+                            pages.hasClients &&
+                                pages.position.hasContentDimensions
+                            ? pages.page ?? currentPage.toDouble()
+                            : currentPage.toDouble();
+                        final distance = (page - index).abs().clamp(0.0, 1.0);
+                        return Transform.scale(
+                          scale: reduced ? 1 : 1 - distance * .045,
+                          alignment: Alignment.centerLeft,
+                          child: child,
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   for (var index = 0; index < featured.length; index++)
                     AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
+                      duration: CafeMotion.of(context, CafeMotion.standard),
                       margin: const EdgeInsets.symmetric(horizontal: 3),
-                      width: index == currentPage ? 18 : 6,
-                      height: 6,
+                      width: index == currentPage ? 24 : 6,
+                      height: 5,
                       decoration: BoxDecoration(
                         color: index == currentPage
                             ? AppColors.teal
@@ -3854,6 +4187,16 @@ class _FeaturedCarousel extends StatelessWidget {
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
+                  const SizedBox(width: 14),
+                  ExcludeSemantics(
+                    child: NumericText(
+                      '${currentPage + 1} / ${featured.length}',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -3862,6 +4205,135 @@ class _FeaturedCarousel extends StatelessWidget {
       ),
     );
   }
+}
+
+class _FeaturedCard extends StatelessWidget {
+  const _FeaturedCard({
+    required this.product,
+    required this.controller,
+    required this.index,
+  });
+  final Product product;
+  final ShopController controller;
+  final int index;
+  @override
+  Widget build(BuildContext context) => CafePress(
+    lift: true,
+    child: Material(
+      color: AppColors.dark,
+      borderRadius: BorderRadius.circular(CafeShape.panel),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: Key('featured-${product.id}'),
+        onTap: () {
+          CafeHaptics.light();
+          FocusManager.instance.primaryFocus?.unfocus();
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              settings: RouteSettings(
+                name: '/details',
+                arguments: product.name,
+              ),
+              builder: (_) => ProductDetailsScreen(
+                product: product,
+                controller: controller,
+              ),
+            ),
+          );
+        },
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 500;
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  flex: compact ? 57 : 51,
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        right: 12,
+                        top: 5,
+                        child: ExcludeSemantics(
+                          child: Text(
+                            '0${index + 1}',
+                            style: displayStyle(
+                              compact ? 76 : 112,
+                              color: AppColors.white.withValues(alpha: .055),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.all(compact ? 18 : 28),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Eyebrow(
+                              'THE CAFE PICKS',
+                              color: AppColors.gold,
+                            ),
+                            const Spacer(),
+                            Text(
+                              product.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: displayStyle(
+                                compact ? 25 : 34,
+                                color: AppColors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              product.subcategory,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppColors.muted,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            NumericText(
+                              pesos(product.price),
+                              style: const TextStyle(
+                                color: AppColors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  flex: compact ? 43 : 49,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ProductImage(product: product),
+                      Positioned(
+                        right: 12,
+                        bottom: 12,
+                        child: _AnimatedAddButton(
+                          key: ValueKey('featured-${product.id}'),
+                          product: product,
+                          controller: controller,
+                          iconOnly: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    ),
+  );
 }
 
 class _BagSummary extends StatelessWidget {
@@ -4024,11 +4496,14 @@ class MenuFilters extends StatelessWidget {
                 isScrollable: true,
                 padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
                 tabAlignment: TabAlignment.start,
-                indicatorColor: AppColors.teal,
-                indicatorWeight: 3,
-                indicatorSize: TabBarIndicatorSize.label,
-                dividerColor: AppColors.border,
-                labelColor: AppColors.dark,
+                indicator: BoxDecoration(
+                  color: AppColors.dark,
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                indicatorPadding: const EdgeInsets.symmetric(vertical: 5),
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                labelColor: AppColors.white,
                 unselectedLabelColor: AppColors.secondaryText,
                 labelStyle: const TextStyle(
                   fontFamily: 'Montserrat',
@@ -4230,158 +4705,161 @@ class ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final quantity = controller.quantityOf(product);
-    return Material(
-      color: AppColors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppColors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        key: Key('product-${product.id}'),
-        onTap: () {
-          CafeHaptics.light();
-          FocusManager.instance.primaryFocus?.unfocus();
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              settings: RouteSettings(
-                name: '/details',
-                arguments: product.name,
+    return CafePress(
+      lift: true,
+      child: Material(
+        color: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(CafeShape.card),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: Key('product-${product.id}'),
+          onTap: () {
+            CafeHaptics.light();
+            FocusManager.instance.primaryFocus?.unfocus();
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                settings: RouteSettings(
+                  name: '/details',
+                  arguments: product.name,
+                ),
+                builder: (_) => ProductDetailsScreen(
+                  product: product,
+                  controller: controller,
+                ),
               ),
-              builder: (_) => ProductDetailsScreen(
-                product: product,
-                controller: controller,
+            );
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ProductImage(product: product),
+                    if (product.featured)
+                      Positioned(
+                        left: 10,
+                        top: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Smooch pick',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.dark,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (quantity > 0)
+                      Positioned(
+                        left: 10,
+                        bottom: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.dark,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${countText(quantity)} in bag',
+                            style: const TextStyle(
+                              color: AppColors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ProductImage(product: product),
-                  if (product.featured)
-                    Positioned(
-                      left: 10,
-                      top: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
+              Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.subcategory,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.secondaryText,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    SizedBox(
+                      height: MediaQuery.textScalerOf(context).scale(15) * 2.7,
+                      child: Text(
+                        product.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
                         ),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'Cafe pick',
-                          style: TextStyle(
-                            fontSize: 10,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final scale =
+                            MediaQuery.textScalerOf(context).scale(13) / 13;
+                        final stacked = constraints.maxWidth < 150 * scale;
+                        final price = NumericText(
+                          pesos(product.price),
+                          style: const TextStyle(
+                            fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: AppColors.dark,
                           ),
-                        ),
-                      ),
-                    ),
-                  if (quantity > 0)
-                    Positioned(
-                      left: 10,
-                      bottom: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.dark,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${countText(quantity)} in bag',
-                          style: const TextStyle(
-                            color: AppColors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.subcategory,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.secondaryText,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  SizedBox(
-                    height: MediaQuery.textScalerOf(context).scale(15) * 2.7,
-                    child: Text(
-                      product.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        height: 1.35,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final scale =
-                          MediaQuery.textScalerOf(context).scale(13) / 13;
-                      final stacked = constraints.maxWidth < 150 * scale;
-                      final price = NumericText(
-                        pesos(product.price),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.dark,
-                        ),
-                      );
-                      final add = _AnimatedAddButton(
-                        product: product,
-                        controller: controller,
-                        shortLabel: constraints.maxWidth < 230 * scale,
-                      );
-                      if (stacked) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        );
+                        final add = _AnimatedAddButton(
+                          product: product,
+                          controller: controller,
+                          shortLabel: constraints.maxWidth < 230 * scale,
+                        );
+                        if (stacked) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              price,
+                              const SizedBox(height: 8),
+                              SizedBox(width: double.infinity, child: add),
+                            ],
+                          );
+                        }
+                        return Row(
                           children: [
-                            price,
-                            const SizedBox(height: 8),
-                            SizedBox(width: double.infinity, child: add),
+                            Expanded(child: price),
+                            const SizedBox(width: 8),
+                            add,
                           ],
                         );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(child: price),
-                          const SizedBox(width: 8),
-                          add,
-                        ],
-                      );
-                    },
-                  ),
-                ],
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -4470,72 +4948,79 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 children: [
                   Flexible(
                     flex: wide ? 1 : 0,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(28),
-                      child: AspectRatio(
-                        aspectRatio: wide ? 1 : 1.1,
-                        child: ProductImage(product: widget.product),
+                    child: CafeReveal(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(28),
+                        child: AspectRatio(
+                          aspectRatio: wide ? 1 : 1.1,
+                          child: ProductImage(
+                            product: widget.product,
+                            highResolution: true,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                   SizedBox(width: wide ? 44 : 0, height: wide ? 0 : 28),
                   Flexible(
                     flex: wide ? 1 : 0,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Eyebrow(widget.product.subcategory),
-                        const SizedBox(height: 12),
-                        Text(widget.product.name, style: displayStyle(38)),
-                        const SizedBox(height: 18),
-                        NumericText(
-                          pesos(widget.product.price),
-                          style: const TextStyle(
-                            fontSize: 25,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        const Divider(),
-                        const SizedBox(height: 18),
-                        const Text(
-                          'About this item',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          widget.product.description,
-                          style: const TextStyle(
-                            color: AppColors.secondaryText,
-                            height: 1.7,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        const Row(
-                          children: [
-                            Icon(
-                              Icons.local_cafe_outlined,
-                              color: AppColors.action,
-                              size: 15,
+                    child: CafeReveal(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Eyebrow(widget.product.subcategory),
+                          const SizedBox(height: 12),
+                          Text(widget.product.name, style: displayStyle(38)),
+                          const SizedBox(height: 18),
+                          NumericText(
+                            pesos(widget.product.price),
+                            style: const TextStyle(
+                              fontSize: 25,
+                              fontWeight: FontWeight.w700,
                             ),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Made with love at Smooch Cafe.',
-                                softWrap: true,
-                                style: TextStyle(
-                                  color: AppColors.secondaryText,
-                                  fontSize: 10,
+                          ),
+                          const SizedBox(height: 24),
+                          const Divider(),
+                          const SizedBox(height: 18),
+                          const Text(
+                            'About this item',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            widget.product.description,
+                            style: const TextStyle(
+                              color: AppColors.secondaryText,
+                              height: 1.7,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          const Row(
+                            children: [
+                              Icon(
+                                Icons.local_cafe_outlined,
+                                color: AppColors.action,
+                                size: 15,
+                              ),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Made with love at Smooch Cafe.',
+                                  softWrap: true,
+                                  style: TextStyle(
+                                    color: AppColors.secondaryText,
+                                    fontSize: 10,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ],
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -4574,17 +5059,20 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                 ],
               );
               final button = Builder(
-                builder: (buttonContext) => FilledButton.icon(
-                  key: const Key('details-add-to-cart'),
-                  onPressed: adding ? null : () => addToCart(buttonContext),
-                  icon: Icon(
-                    adding ? Icons.check : Icons.shopping_bag_outlined,
-                    size: 18,
-                  ),
-                  label: NumericText(
-                    adding
-                        ? 'Added to bag'
-                        : 'Add to bag • ${pesos(widget.product.price * quantity)}',
+                builder: (buttonContext) => CafePress(
+                  enabled: !adding,
+                  child: FilledButton.icon(
+                    key: const Key('details-add-to-cart'),
+                    onPressed: adding ? null : () => addToCart(buttonContext),
+                    icon: Icon(
+                      adding ? Icons.check : Icons.shopping_bag_outlined,
+                      size: 18,
+                    ),
+                    label: NumericText(
+                      adding
+                          ? 'Added to bag'
+                          : 'Add to bag • ${pesos(widget.product.price * quantity)}',
+                    ),
                   ),
                 ),
               );
@@ -4668,21 +5156,13 @@ class _CartScreenState extends State<CartScreen> {
                     maxWidth: 760,
                     child: Padding(
                       padding: const EdgeInsets.only(top: 28, bottom: 24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Eyebrow('Good things in the bag'),
-                          const SizedBox(height: 10),
-                          Text('Review your items.', style: displayStyle(28)),
-                          const SizedBox(height: 10),
-                          Text(
-                            '${countText(itemCount)} ${itemCount == 1 ? 'item' : 'items'} to brighten your day.',
-                            style: const TextStyle(
-                              color: AppColors.secondaryText,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                      child: CafeReveal(
+                        child: CafeSectionHeading(
+                          eyebrow: 'GOOD THINGS, ALL TOGETHER',
+                          title: 'A bag full of happy.',
+                          subtitle:
+                              '${countText(itemCount)} ${itemCount == 1 ? 'item' : 'items'} picked by you. One lovely order.',
+                        ),
                       ),
                     ),
                   ),
@@ -4747,12 +5227,14 @@ class _CartScreenState extends State<CartScreen> {
                         const SizedBox(height: 18),
                         SizedBox(
                           width: double.infinity,
-                          child: FilledButton.icon(
-                            key: const Key('open-checkout'),
-                            onPressed: _openCheckout,
-                            iconAlignment: IconAlignment.end,
-                            icon: const Icon(Icons.arrow_forward, size: 18),
-                            label: const Text('Continue to checkout'),
+                          child: CafePress(
+                            child: FilledButton.icon(
+                              key: const Key('open-checkout'),
+                              onPressed: _openCheckout,
+                              iconAlignment: IconAlignment.end,
+                              icon: const Icon(Icons.arrow_forward, size: 18),
+                              label: const Text('Continue to checkout'),
+                            ),
                           ),
                         ),
                       ],
@@ -5747,7 +6229,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    const Eyebrow('1 · Contact details'),
+                    const CheckoutStepHeading(
+                      step: 1,
+                      title: 'Contact details',
+                      icon: Icons.person_outline,
+                    ),
                     const SizedBox(height: 12),
                     TextFormField(
                       key: const Key('customer-name'),
@@ -5781,7 +6267,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       validator: validateMobile,
                     ),
                     const SizedBox(height: 24),
-                    const Eyebrow('2 · Delivery address'),
+                    const CheckoutStepHeading(
+                      step: 2,
+                      title: 'Delivery address',
+                      icon: Icons.location_on_outlined,
+                    ),
                     const SizedBox(height: 12),
                     TextFormField(
                       key: const Key('delivery-address'),
@@ -5903,7 +6393,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Eyebrow('3 · Payment method'),
+                    const CheckoutStepHeading(
+                      step: 3,
+                      title: 'Payment method',
+                      icon: Icons.account_balance_wallet_outlined,
+                    ),
                     const SizedBox(height: 12),
                     _PaymentChoice(
                       key: const Key('payment-cash'),
@@ -5987,23 +6481,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
-                      child: FilledButton.icon(
-                        key: const Key('place-order'),
-                        onPressed: busy ? null : placeOrder,
-                        icon: busy
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.arrow_forward, size: 18),
-                        iconAlignment: IconAlignment.end,
-                        label: Text(
-                          payment == PaymentMethod.cash
-                              ? 'Place order'
-                              : 'Continue to GCash',
+                      child: CafePress(
+                        enabled: !busy,
+                        child: FilledButton.icon(
+                          key: const Key('place-order'),
+                          onPressed: busy ? null : placeOrder,
+                          icon: busy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.arrow_forward, size: 18),
+                          iconAlignment: IconAlignment.end,
+                          label: Text(
+                            payment == PaymentMethod.cash
+                                ? 'Place order'
+                                : 'Continue to GCash',
+                          ),
                         ),
                       ),
                     ),
@@ -6750,6 +7247,31 @@ class _OrderTrackingState extends State<OrderTracking>
             style: TextStyle(fontSize: 11, color: AppColors.secondaryText),
           ),
           const SizedBox(height: 18),
+          ExcludeSemantics(
+            child: Row(
+              children: [
+                for (final step in widget.order.stages)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 5),
+                      child: AnimatedContainer(
+                        duration: motion,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          color:
+                              widget.order.stages.indexOf(step) <=
+                                  widget.order.stages.indexOf(stage)
+                              ? AppColors.teal
+                              : AppColors.border,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
           Semantics(
             liveRegion: true,
             child: AnimatedSwitcher(
@@ -6886,21 +7408,7 @@ class OrderConfirmationScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: const BoxDecoration(
-                      color: AppColors.softTeal,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      color: AppColors.dark,
-                      size: 44,
-                    ),
-                  ),
-                ),
+                Center(child: CafeSuccessSeal(animate: !fromHistory)),
                 const SizedBox(height: 20),
                 Semantics(
                   liveRegion: true,
@@ -7118,13 +7626,15 @@ class OrderConfirmationScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
-                  key: const Key('continue-shopping'),
-                  onPressed: () => _continueShopping(context),
-                  iconAlignment: IconAlignment.end,
-                  icon: const Icon(Icons.arrow_forward, size: 18),
-                  label: Text(
-                    fromHistory ? 'Back to orders' : 'Continue Shopping',
+                child: CafePress(
+                  child: FilledButton.icon(
+                    key: const Key('continue-shopping'),
+                    onPressed: () => _continueShopping(context),
+                    iconAlignment: IconAlignment.end,
+                    icon: const Icon(Icons.arrow_forward, size: 18),
+                    label: Text(
+                      fromHistory ? 'Back to orders' : 'Continue Shopping',
+                    ),
                   ),
                 ),
               ),
@@ -7140,83 +7650,305 @@ class OrderConfirmationScreen extends StatelessWidget {
 // CAFE INFORMATION
 // ============================================================
 class CafeSection extends StatelessWidget {
-  const CafeSection({super.key, required this.onBrowse});
+  const CafeSection({
+    super.key,
+    required this.onBrowse,
+    required this.onCategory,
+    required this.products,
+  });
   final VoidCallback onBrowse;
+  final ValueChanged<String> onCategory;
+  final List<Product> products;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Eyebrow('Your neighborhood happy place'),
-      const SizedBox(height: 14),
-      Text(
-        'Come for the coffee.\nStay for the comfort.',
-        style: displayStyle(34),
-      ),
-      const SizedBox(height: 24),
-      ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: ColoredBox(
-          color: AppColors.softTeal,
-          child: SizedBox(
-            height: 240,
-            width: double.infinity,
-            child: Image.asset(
-              'assets/images/landing1.png',
-              fit: BoxFit.contain,
-              semanticLabel: 'Smooch Cafe drinks and food',
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final spacious =
+          constraints.maxWidth >= 700 &&
+          MediaQuery.textScalerOf(context).scale(14) < 23;
+      final collections = [
+        (
+          'Coffee',
+          'Your coffee ritual',
+          'A familiar kind of happy.',
+          Icons.coffee_outlined,
+        ),
+        (
+          'Food',
+          'Something satisfying',
+          'Make room for a good bite.',
+          Icons.lunch_dining_outlined,
+        ),
+        (
+          'Pastries',
+          'A sweeter pause',
+          'Little treats. Big smiles.',
+          Icons.bakery_dining_outlined,
+        ),
+      ];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const CafeReveal(
+            child: CafeSectionHeading(
+              eyebrow: 'THE SMOOCH EDIT',
+              title: 'Find your Smooch moment.',
+              subtitle: 'A coffee ritual, a comfort bite, or a little treat. There’s a Smooch for every mood.',
+            ),
+          ),
+          const SizedBox(height: 26),
+
+          const Text(
+            'What are you in the mood for?',
+            style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Pick a little inspiration. We’ll take you to the good stuff.',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.6,
+              color: AppColors.secondaryText,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 14,
+            runSpacing: 14,
+            children: [
+              for (final (category, title, subtitle, icon) in collections)
+                if (products.any((product) => product.category == category))
+                  SizedBox(
+                    width: spacious
+                        ? (constraints.maxWidth - 28) / 3
+                        : constraints.maxWidth,
+                    child: _DiscoverCollection(
+                      category: category,
+                      title: title,
+                      subtitle: subtitle,
+                      icon: icon,
+                      product: products.firstWhere(
+                        (product) => product.category == category,
+                      ),
+                      onTap: () => onCategory(category),
+                    ),
+                  ),
+            ],
+          ),
+          const SizedBox(height: 28),
+          CafeReveal(
+            delay: .1,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(CafeShape.panel),
+              child: ColoredBox(
+                color: AppColors.dark,
+                child: Padding(
+                  padding: EdgeInsets.all(spacious ? 32 : 24),
+                  child: Flex(
+                    direction: spacious ? Axis.horizontal : Axis.vertical,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        flex: spacious ? 5 : 0,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Eyebrow(
+                              'A LITTLE EVERYDAY JOY',
+                              color: AppColors.gold,
+                            ),
+                            const SizedBox(height: 18),
+                            Text(
+                              'Good company.\nEven better cravings.',
+                              style: displayStyle(
+                                spacious ? 38 : 29,
+                                color: AppColors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            const Text(
+                              'Your neighborhood cafe, delivered to your door in Carmona and nearby areas within 10 km.',
+                              style: TextStyle(
+                                color: AppColors.muted,
+                                fontSize: 13,
+                                height: 1.7,
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            CafePress(
+                              child: FilledButton.icon(
+                                onPressed: onBrowse,
+                                iconAlignment: IconAlignment.end,
+                                icon: const Icon(Icons.arrow_forward, size: 18),
+                                label: const Text('Explore our menu'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        width: spacious ? 36 : 0,
+                        height: spacious ? 0 : 18,
+                      ),
+                      Flexible(
+                        flex: spacious ? 4 : 0,
+                        child: SizedBox(
+                          height: spacious ? 250 : 135,
+                          width: double.infinity,
+                          child: Image.asset(
+                            'assets/images/landing1.png',
+                            fit: BoxFit.contain,
+                            semanticLabel: 'Smooch Cafe drinks and food',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 38),
+          const Divider(),
+          const SizedBox(height: 28),
+          const CafeSectionHeading(
+            eyebrow: 'ROOTED IN CARMONA',
+            title: 'Your neighborhood happy place.',
+            subtitle:
+                'Coffee, comfort, and a warm hello. Here’s where to find us.',
+          ),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 32,
+            runSpacing: 4,
+            children: [
+              SizedBox(
+                width: spacious
+                    ? (constraints.maxWidth - 32) / 2
+                    : constraints.maxWidth,
+                child: const Column(
+                  children: [
+                    _CafeInfo(
+                      icon: Icons.location_on_outlined,
+                      title: 'Find us',
+                      text: '447 JM Loyola Street, Carmona, Cavite',
+                    ),
+                    _CafeInfo(
+                      icon: Icons.schedule,
+                      title: 'Opening hours',
+                      text: 'Monday–Sunday • 2:00 PM–11:00 PM',
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: spacious
+                    ? (constraints.maxWidth - 32) / 2
+                    : constraints.maxWidth,
+                child: const Column(
+                  children: [
+                    _CafeInfo(
+                      icon: Icons.phone_outlined,
+                      title: 'Give us a call',
+                      text: '(0965) 760 8290',
+                      link: 'tel:+639657608290',
+                      actionLabel: 'Call cafe',
+                    ),
+                    _CafeInfo(
+                      icon: Icons.mail_outline,
+                      title: 'Say hello',
+                      text: 'smoochcafe25@gmail.com',
+                      link: 'mailto:smoochcafe25@gmail.com',
+                      actionLabel: 'Email cafe',
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 26),
+          const AppVersionLabel(),
+        ],
+      );
+    },
+  );
+}
+
+class _DiscoverCollection extends StatelessWidget {
+  const _DiscoverCollection({
+    required this.category,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.product,
+    required this.onTap,
+  });
+  final String category, title, subtitle;
+  final IconData icon;
+  final Product product;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: 'Browse $category. $title. $subtitle',
+    onTap: onTap,
+    excludeSemantics: true,
+    child: CafePress(
+      lift: true,
+      child: Material(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(CafeShape.card),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: Key('discover-$category'),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: SizedBox(
+                    width: 68,
+                    height: 82,
+                    child: ProductImage(product: product),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(icon, color: AppColors.teal, size: 20),
+                      const SizedBox(height: 9),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          height: 1.5,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.north_east, size: 17, color: AppColors.teal),
+              ],
             ),
           ),
         ),
       ),
-      const SizedBox(height: 24),
-      const Text(
-        'A little about Smooch',
-        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-      ),
-      const SizedBox(height: 12),
-      const Text(
-        'Black tea and coffee lovers dedicated to quality, sustainability, and the perfect cup. From handcrafted drinks to warm meals and freshly baked pastries, there’s comfort for every craving.',
-        style: TextStyle(
-          color: AppColors.secondaryText,
-          fontSize: 14,
-          height: 1.8,
-        ),
-      ),
-      const SizedBox(height: 22),
-      const _CafeInfo(
-        icon: Icons.location_on_outlined,
-        title: 'Find us',
-        text: '447 JM Loyola Street, Carmona, Cavite',
-      ),
-      const _CafeInfo(
-        icon: Icons.schedule,
-        title: 'Opening hours',
-        text: 'Monday–Sunday • 2:00 PM–11:00 PM',
-      ),
-      const _CafeInfo(
-        icon: Icons.phone_outlined,
-        title: 'Give us a call',
-        text: '(0965) 760 8290',
-        link: 'tel:+639657608290',
-        actionLabel: 'Call cafe',
-      ),
-      const _CafeInfo(
-        icon: Icons.mail_outline,
-        title: 'Say hello',
-        text: 'smoochcafe25@gmail.com',
-        link: 'mailto:smoochcafe25@gmail.com',
-        actionLabel: 'Email cafe',
-      ),
-      const SizedBox(height: 24),
-      FilledButton.icon(
-        onPressed: onBrowse,
-        icon: const Icon(Icons.restaurant_menu),
-        label: const Text('Explore our menu'),
-      ),
-      const SizedBox(height: 24),
-      const AppVersionLabel(),
-    ],
+    ),
   );
 }
 
@@ -7320,7 +8052,7 @@ class CafeRouteTitles extends NavigatorObserver {
   }
 
   void selectMenuTab(int index) {
-    menuLabel = const ['Our menu', 'Order history', 'Cafe info'][index];
+    menuLabel = const ['Our menu', 'Order history', 'Discover'][index];
     if (active?.settings.name == '/menu') publish(menuLabel);
   }
 

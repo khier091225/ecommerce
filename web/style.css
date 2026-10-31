@@ -5,7 +5,7 @@ html, body { margin: 0; min-height: 100%; background: #0A4952; }
   padding: 24px; box-sizing: border-box; text-align: center;
   background: #0A4952; color: #fff; font: 16px/1.6 system-ui, sans-serif;
 }
-#smooch-boot strong { font-size: 26px; }
+#smooch-boot .boot-logo { display: block; width: 180px; max-width: 65vw; height: auto; margin-bottom: 12px; object-fit: contain; }
 #smooch-boot p { color: #C0D8DA; max-width: 100%; }
 .boot-track { width: 180px; max-width: 100%; height: 6px; overflow: hidden; border-radius: 9px; background: #39747C; }
 .boot-bar { width: 0; height: 100%; background: #F04C45; transition: width 180ms ease; }

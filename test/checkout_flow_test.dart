@@ -37,6 +37,8 @@ void main() {
         find.byKey(const Key('delivery-address')),
         '12 Rizal Street, Carmona, Cavite',
       );
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
       await Scrollable.ensureVisible(
         tester.element(find.byKey(const Key('payment-digital'))),
       );

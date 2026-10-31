@@ -271,7 +271,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Cafe info'));
+    await tester.tap(find.text('Discover'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });

@@ -279,7 +279,7 @@ void main() {
           )
           .controller,
     );
-    await tester.tap(find.text('Cafe info'));
+    await tester.tap(find.text('Discover'));
     await tester.pumpAndSettle();
     expect(
       PrimaryScrollController.of(tester.element(scaffold)),
@@ -329,15 +329,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(observer.title.value, 'Our menu · Smooch Cafe');
     expect(searchFocus.hasFocus, isFalse);
-    await tester.tap(find.text('Cafe info'));
+    await tester.tap(find.text('Discover'));
     await tester.pumpAndSettle();
-    expect(observer.title.value, 'Cafe info · Smooch Cafe');
+    expect(observer.title.value, 'Discover · Smooch Cafe');
     await tester.tap(find.byTooltip('View cart'));
     await tester.pumpAndSettle();
     expect(observer.title.value, 'Your bag · Smooch Cafe');
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(observer.title.value, 'Cafe info · Smooch Cafe');
+    expect(observer.title.value, 'Discover · Smooch Cafe');
     await tester.tap(find.byTooltip('Back to start'));
     await tester.pumpAndSettle();
     expect(observer.title.value, 'Welcome · Smooch Cafe');

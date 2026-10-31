@@ -167,12 +167,9 @@ void main() {
     await tester.tap(find.byKey(const Key('continue-shopping')));
     await tester.pumpAndSettle();
     expect(find.text('Your orders'), findsOneWidget);
-    await tester.tap(find.text('Cafe info'));
+    await tester.tap(find.text('Discover'));
     await tester.pumpAndSettle();
-    expect(
-      find.text('Come for the coffee.\nStay for the comfort.'),
-      findsOneWidget,
-    );
+    expect(find.text('Find your Smooch moment.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
