@@ -2,7 +2,7 @@
 
 Prepared on 31 October 2026 (Asia/Manila) using flutter-improve-design. All 25 findings were selected. The application was scanned again and each selected article was fetched in full before the plans were written.
 
-The plans below document the original review. After approval to implement all findings, 24 plans were implemented and the share-preview plan was prepared pending a public hosting URL. See [implementation status and verification](implementation.md) for the current result. The quoted source in each plan remains a historical baseline.
+The plans below document the original review. After approval to implement all findings, 24 plans were implemented and the share-preview plan was prepared pending a public hosting URL. Later, the user requested removing the extra loading screen and retaining only the 3D Start Screen; the loading-progress plan is now historical. See [implementation status and verification](implementation.md) and [the latest UI report](../../ui-motion-polish-2026-11-01.md) for subsequent changes. The quoted source in each plan remains a historical baseline.
 
 ## Start here
 

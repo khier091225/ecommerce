@@ -1,23 +1,30 @@
 {{flutter_js}}
 {{flutter_build_config}}
 
-const boot = document.getElementById('smooch-boot');
-const bar = boot?.querySelector('.boot-bar');
-const progress = value => { if (bar) bar.style.width = value + '%'; };
 const showBootError = error => {
-  if (boot) boot.textContent = 'Could not open Smooch Cafe. Please refresh to try again.';
+  if (!document.getElementById('startup-error')) {
+    const message = document.createElement('main');
+    message.id = 'startup-error';
+    message.className = 'startup-error';
+    message.setAttribute('role', 'alert');
+    const title = document.createElement('h1');
+    title.textContent = 'Could not open Smooch Cafe.';
+    const copy = document.createElement('p');
+    copy.textContent = 'Please refresh to try again.';
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.textContent = 'Reload';
+    retry.addEventListener('click', () => window.location.reload());
+    message.append(title, copy, retry);
+    document.body.appendChild(message);
+  }
   console.error(error);
 };
-window.addEventListener('flutter-first-frame', () => boot?.remove(), {once: true});
-progress(20);
 _flutter.loader.load({
   onEntrypointLoaded: async engineInitializer => {
     try {
-      progress(50);
       const runner = await engineInitializer.initializeEngine();
-      progress(80);
       await runner.runApp();
-      progress(100);
     } catch (error) { showBootError(error); }
   },
 }).catch(showBootError);

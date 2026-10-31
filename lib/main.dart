@@ -1,6 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui'
+    as ui
+    show
+        Image,
+        ImageShader,
+        PictureRecorder,
+        instantiateImageCodec,
+        Vertices,
+        VertexMode;
 import 'dart:ui' show FontFeature, PlatformDispatcher, PointerDeviceKind;
 
 import 'package:flutter/foundation.dart'
@@ -3047,7 +3057,10 @@ class _StartScreenState extends State<StartScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _foreground = state == AppLifecycleState.resumed;
+    final foreground = state == AppLifecycleState.resumed;
+    if (_foreground != foreground) {
+      setState(() => _foreground = foreground);
+    }
     _syncMotion();
   }
 
@@ -3103,17 +3116,39 @@ class _StartScreenState extends State<StartScreen>
       child: Semantics(
         label: 'A floating Smooch Cafe cup with coffee beans and rising steam',
         image: true,
+        hint: _reducedMotion == true
+            ? null
+            : 'Drag left or right to turn the cup.',
         child: ExcludeSemantics(
-          child: AnimatedBuilder(
-            animation: Listenable.merge([_animation, _idle]),
-            builder: (context, _) => CustomPaint(
-              key: const Key('coffee-scene'),
-              painter: CoffeeScenePainter(
-                progress: _animation.value,
-                idlePhase: _idle.value,
-                reducedMotion: _reducedMotion ?? false,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                bottom: 20,
+                child: CoffeeSceneViewport(
+                  entrance: _animation,
+                  idle: _idle,
+                  reducedMotion: _reducedMotion ?? false,
+                  active: !_leaving && _foreground,
+                ),
               ),
-            ),
+              if (_reducedMotion == false)
+                const Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: IgnorePointer(
+                    child: Text(
+                      'DRAG TO EXPLORE',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 9,
+                        letterSpacing: 1.6,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -3787,24 +3822,7 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin {
                           ),
                         ),
                         SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              24,
-                              32,
-                              24,
-                              math.max(32.0, endInset),
-                            ),
-                            child: const Center(
-                              child: Text(
-                                'A little Smooch goes a long way.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: AppColors.secondaryText,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ),
+                          child: SizedBox(height: math.max(24.0, endInset)),
                         ),
                       ],
                     ),
@@ -7663,210 +7681,173 @@ class CafeSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final spacious =
-          constraints.maxWidth >= 700 &&
-          MediaQuery.textScalerOf(context).scale(14) < 23;
+      final largeText = MediaQuery.textScalerOf(context).scale(14) > 20;
+      final spacious = constraints.maxWidth >= 700 && !largeText;
+      final horizontal = largeText || constraints.maxWidth < 260;
       final collections = [
-        (
-          'Coffee',
-          'Your coffee ritual',
-          'A familiar kind of happy.',
-          Icons.coffee_outlined,
-        ),
-        (
-          'Food',
-          'Something satisfying',
-          'Make room for a good bite.',
-          Icons.lunch_dining_outlined,
-        ),
-        (
-          'Pastries',
-          'A sweeter pause',
-          'Little treats. Big smiles.',
-          Icons.bakery_dining_outlined,
-        ),
-      ];
+        for (final category in const ['Coffee', 'Food', 'Pastries'])
+          (
+            category: category,
+            items: products
+                .where((product) => product.category == category)
+                .toList(),
+          ),
+      ].where((collection) => collection.items.isNotEmpty).toList();
+      final columns = math.max(1, collections.length);
+      final tileWidth = horizontal
+          ? constraints.maxWidth
+          : (constraints.maxWidth - 12 * (columns - 1)) / columns;
+      final detailsWidth = spacious
+          ? (constraints.maxWidth - 72) / 2
+          : constraints.maxWidth - 40;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const CafeReveal(
-            child: CafeSectionHeading(
-              eyebrow: 'THE SMOOCH EDIT',
-              title: 'Find your Smooch moment.',
-              subtitle: 'A coffee ritual, a comfort bite, or a little treat. There’s a Smooch for every mood.',
-            ),
-          ),
-          const SizedBox(height: 26),
-
-          const Text(
-            'What are you in the mood for?',
-            style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Pick a little inspiration. We’ll take you to the good stuff.',
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.6,
-              color: AppColors.secondaryText,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Wrap(
-            spacing: 14,
-            runSpacing: 14,
-            children: [
-              for (final (category, title, subtitle, icon) in collections)
-                if (products.any((product) => product.category == category))
-                  SizedBox(
-                    width: spacious
-                        ? (constraints.maxWidth - 28) / 3
-                        : constraints.maxWidth,
-                    child: _DiscoverCollection(
-                      category: category,
-                      title: title,
-                      subtitle: subtitle,
-                      icon: icon,
-                      product: products.firstWhere(
-                        (product) => product.category == category,
-                      ),
-                      onTap: () => onCategory(category),
-                    ),
-                  ),
-            ],
-          ),
-          const SizedBox(height: 28),
           CafeReveal(
-            delay: .1,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(CafeShape.panel),
-              child: ColoredBox(
-                color: AppColors.dark,
-                child: Padding(
-                  padding: EdgeInsets.all(spacious ? 32 : 24),
-                  child: Flex(
-                    direction: spacious ? Axis.horizontal : Axis.vertical,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Flexible(
-                        flex: spacious ? 5 : 0,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Eyebrow(
-                              'A LITTLE EVERYDAY JOY',
-                              color: AppColors.gold,
-                            ),
-                            const SizedBox(height: 18),
-                            Text(
-                              'Good company.\nEven better cravings.',
-                              style: displayStyle(
-                                spacious ? 38 : 29,
-                                color: AppColors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            const Text(
-                              'Your neighborhood cafe, delivered to your door in Carmona and nearby areas within 10 km.',
-                              style: TextStyle(
-                                color: AppColors.muted,
-                                fontSize: 13,
-                                height: 1.7,
-                              ),
-                            ),
-                            const SizedBox(height: 22),
-                            CafePress(
-                              child: FilledButton.icon(
-                                onPressed: onBrowse,
-                                iconAlignment: IconAlignment.end,
-                                icon: const Icon(Icons.arrow_forward, size: 18),
-                                label: const Text('Explore our menu'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(
-                        width: spacious ? 36 : 0,
-                        height: spacious ? 0 : 18,
-                      ),
-                      Flexible(
-                        flex: spacious ? 4 : 0,
-                        child: SizedBox(
-                          height: spacious ? 250 : 135,
-                          width: double.infinity,
-                          child: Image.asset(
-                            'assets/images/landing1.png',
-                            fit: BoxFit.contain,
-                            semanticLabel: 'Smooch Cafe drinks and food',
-                          ),
-                        ),
-                      ),
-                    ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Discover Smooch',
+                  style: displayStyle(spacious ? 36 : 30),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Coffee, comfort, and something sweet.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.6,
+                    color: AppColors.secondaryText,
                   ),
                 ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          if (collections.isNotEmpty) ...[
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final collection in collections)
+                  SizedBox(
+                    width: tileWidth,
+                    child: _DiscoverCollection(
+                      category: collection.category,
+                      product: collection.items.first,
+                      itemCount: collection.items.length,
+                      horizontal: horizontal,
+                      imageHeight: (tileWidth * .98).clamp(88.0, 200.0),
+                      onTap: () => onCategory(collection.category),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+          ],
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              key: const Key('discover-browse-menu'),
+              onPressed: onBrowse,
+              iconAlignment: IconAlignment.end,
+              icon: const Icon(Icons.arrow_forward, size: 16),
+              label: const Text('Browse menu'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.teal,
+                minimumSize: const Size(48, 48),
               ),
             ),
           ),
-          const SizedBox(height: 38),
-          const Divider(),
-          const SizedBox(height: 28),
-          const CafeSectionHeading(
-            eyebrow: 'ROOTED IN CARMONA',
-            title: 'Your neighborhood happy place.',
-            subtitle:
-                'Coffee, comfort, and a warm hello. Here’s where to find us.',
+          const SizedBox(height: 22),
+          const Text(
+            'Visit Smooch',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            key: const Key('discover-cafe-details'),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(CafeShape.card),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 32,
+                  runSpacing: 0,
+                  children: [
+                    SizedBox(
+                      width: detailsWidth,
+                      child: const Column(
+                        children: [
+                          _CafeInfo(
+                            icon: Icons.location_on_outlined,
+                            title: 'Find us',
+                            text: '447 JM Loyola Street, Carmona, Cavite',
+                          ),
+                          Divider(height: 1),
+                          _CafeInfo(
+                            icon: Icons.schedule,
+                            title: 'Opening hours',
+                            text: 'Monday–Sunday • 2:00 PM–11:00 PM',
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(
+                      width: detailsWidth,
+                      child: Column(
+                        children: [
+                          if (!spacious) const Divider(height: 1),
+                          const _CafeInfo(
+                            icon: Icons.phone_outlined,
+                            title: 'Give us a call',
+                            text: '(0965) 760 8290',
+                            link: 'tel:+639657608290',
+                            actionLabel: 'Call cafe',
+                          ),
+                          const Divider(height: 1),
+                          const _CafeInfo(
+                            icon: Icons.mail_outline,
+                            title: 'Say hello',
+                            text: 'smoochcafe25@gmail.com',
+                            link: 'mailto:smoochcafe25@gmail.com',
+                            actionLabel: 'Email cafe',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.delivery_dining_outlined,
+                      size: 19,
+                      color: AppColors.teal,
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Delivery within 10 km of Carmona',
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.5,
+                          color: AppColors.secondaryText,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 20),
-          Wrap(
-            spacing: 32,
-            runSpacing: 4,
-            children: [
-              SizedBox(
-                width: spacious
-                    ? (constraints.maxWidth - 32) / 2
-                    : constraints.maxWidth,
-                child: const Column(
-                  children: [
-                    _CafeInfo(
-                      icon: Icons.location_on_outlined,
-                      title: 'Find us',
-                      text: '447 JM Loyola Street, Carmona, Cavite',
-                    ),
-                    _CafeInfo(
-                      icon: Icons.schedule,
-                      title: 'Opening hours',
-                      text: 'Monday–Sunday • 2:00 PM–11:00 PM',
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(
-                width: spacious
-                    ? (constraints.maxWidth - 32) / 2
-                    : constraints.maxWidth,
-                child: const Column(
-                  children: [
-                    _CafeInfo(
-                      icon: Icons.phone_outlined,
-                      title: 'Give us a call',
-                      text: '(0965) 760 8290',
-                      link: 'tel:+639657608290',
-                      actionLabel: 'Call cafe',
-                    ),
-                    _CafeInfo(
-                      icon: Icons.mail_outline,
-                      title: 'Say hello',
-                      text: 'smoochcafe25@gmail.com',
-                      link: 'mailto:smoochcafe25@gmail.com',
-                      actionLabel: 'Email cafe',
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 26),
           const AppVersionLabel(),
         ],
       );
@@ -7877,79 +7858,90 @@ class CafeSection extends StatelessWidget {
 class _DiscoverCollection extends StatelessWidget {
   const _DiscoverCollection({
     required this.category,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
     required this.product,
+    required this.itemCount,
     required this.onTap,
+    required this.horizontal,
+    required this.imageHeight,
   });
-  final String category, title, subtitle;
-  final IconData icon;
+  final String category;
   final Product product;
+  final int itemCount;
   final VoidCallback onTap;
+  final bool horizontal;
+  final double imageHeight;
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: 'Browse $category. $title. $subtitle',
-    onTap: onTap,
-    excludeSemantics: true,
-    child: CafePress(
-      lift: true,
-      child: Material(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(CafeShape.card),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          key: Key('discover-$category'),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: SizedBox(
-                    width: 68,
-                    height: 82,
-                    child: ProductImage(product: product),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) {
+    final count =
+        '${countText(itemCount)} ${itemCount == 1 ? 'item' : 'items'}';
+    final image = ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        width: horizontal ? 68 : double.infinity,
+        height: horizontal ? 68 : imageHeight,
+        child: ProductImage(product: product),
+      ),
+    );
+    final text = Column(
+      crossAxisAlignment: horizontal
+          ? CrossAxisAlignment.start
+          : CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          category,
+          textAlign: horizontal ? TextAlign.start : TextAlign.center,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          count,
+          style: const TextStyle(
+            fontSize: 11,
+            height: 1.5,
+            color: AppColors.secondaryText,
+          ),
+        ),
+      ],
+    );
+    return Semantics(
+      button: true,
+      label: 'Browse $category. $count.',
+      onTap: onTap,
+      excludeSemantics: true,
+      child: CafePress(
+        lift: true,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            key: Key('discover-$category'),
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: horizontal
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        image,
+                        const SizedBox(width: 16),
+                        Expanded(child: text),
+                      ],
+                    ),
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(icon, color: AppColors.teal, size: 20),
-                      const SizedBox(height: 9),
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          height: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          height: 1.5,
-                          color: AppColors.secondaryText,
-                        ),
-                      ),
+                      image,
+                      const SizedBox(height: 12),
+                      text,
+                      const SizedBox(height: 6),
                     ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                const Icon(Icons.north_east, size: 17, color: AppColors.teal),
-              ],
-            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _CafeInfo extends StatelessWidget {
@@ -7968,12 +7960,12 @@ class _CafeInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 14),
+    padding: const EdgeInsets.symmetric(vertical: 10),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: AppColors.teal, size: 22),
-        const SizedBox(width: 16),
+        Icon(icon, color: AppColors.teal, size: 20),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -7982,16 +7974,16 @@ class _CafeInfo extends StatelessWidget {
                 title,
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
-                  fontSize: 14,
+                  fontSize: 12,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               SelectableText(
                 text,
                 style: const TextStyle(
                   color: AppColors.secondaryText,
-                  fontSize: 14,
-                  height: 1.7,
+                  fontSize: 13,
+                  height: 1.5,
                 ),
               ),
             ],
@@ -8372,107 +8364,482 @@ class _FriendlyErrorDebugText extends StatelessWidget {
 // ============================================================
 // 3D COFFEE SCENE DRAWING
 // ============================================================
-// A small perspective renderer: the cup is a shaded surface of revolution.
-// Faces are sorted by depth; visible lettering follows the curved cup surface.
+// Cached meshes and textures are projected into GPU triangle batches.
+class CoffeeSceneViewport extends StatefulWidget {
+  const CoffeeSceneViewport({
+    super.key,
+    required this.entrance,
+    required this.idle,
+    required this.reducedMotion,
+    this.active = true,
+  });
+  final Animation<double> entrance;
+  final Animation<double> idle;
+  final bool reducedMotion;
+  final bool active;
+  @override
+  State<CoffeeSceneViewport> createState() => _CoffeeSceneViewportState();
+}
+
+class _CoffeeSceneViewportState extends State<CoffeeSceneViewport>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
+  late final horizontal = AnimationController.unbounded(vsync: this);
+  late final vertical = AnimationController.unbounded(vsync: this);
+  final buffers = _CoffeeRenderBuffers();
+  ui.Image? logoImage;
+  ui.Image? latteImage;
+  ui.ImageShader? logoShader;
+  ui.ImageShader? latteShader;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final recording = ui.PictureRecorder();
+    final canvas = Canvas(recording);
+    _paintLatteTexture(canvas);
+    // Solid ceramic samples this white gutter, so the entire depth-sorted
+    // model shares one texture and does not split into tiny material batches.
+    canvas.drawRect(
+      const Rect.fromLTWH(512, 0, 8, 512),
+      Paint()..color = Colors.white,
+    );
+    final picture = recording.endRecording();
+    latteImage = picture.toImageSync(520, 512);
+    picture.dispose();
+    latteShader = ui.ImageShader(
+      latteImage!,
+      TileMode.clamp,
+      TileMode.clamp,
+      Matrix4.identity().storage,
+      filterQuality: FilterQuality.medium,
+    );
+    unawaited(loadLogo());
+  }
+
+  Future<void> loadLogo() async {
+    try {
+      final data = await rootBundle.load('assets/images/logo.png');
+      final codec = await ui.instantiateImageCodec(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+        targetWidth: 512,
+      );
+      ui.Image image;
+      try {
+        image = (await codec.getNextFrame()).image;
+      } finally {
+        codec.dispose();
+      }
+      if (!mounted) {
+        image.dispose();
+        return;
+      }
+      final shader = ui.ImageShader(
+        image,
+        TileMode.clamp,
+        TileMode.clamp,
+        Matrix4.identity().storage,
+        filterQuality: FilterQuality.medium,
+      );
+      setState(() {
+        logoImage = image;
+        logoShader = shader;
+      });
+    } catch (_) {
+      // The mesh keeps its small heart mark if the bundled logo cannot decode.
+    }
+  }
+
+  @override
+  void didUpdateWidget(CoffeeSceneViewport oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.reducedMotion || !widget.active) {
+      horizontal.value = 0;
+      vertical.value = 0;
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      horizontal.value = 0;
+      vertical.value = 0;
+    }
+  }
+
+  void moveTo(Offset local, Size size) {
+    if (widget.reducedMotion || !widget.active || size.isEmpty) return;
+    spring(horizontal, (local.dx / size.width * 2 - 1).clamp(-1.0, 1.0));
+    spring(vertical, (local.dy / size.height * 2 - 1).clamp(-1.0, 1.0));
+  }
+
+  void spring(AnimationController controller, double target) {
+    controller.animateWith(
+      SpringSimulation(
+        CafeMotion.spring,
+        controller.value,
+        target,
+        controller.velocity,
+      ),
+    );
+  }
+
+  void rest() {
+    if (widget.reducedMotion || !widget.active) return;
+    spring(horizontal, 0);
+    spring(vertical, 0);
+  }
+
+  @override
+  void dispose() {
+    horizontal.dispose();
+    vertical.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    logoShader?.dispose();
+    latteShader?.dispose();
+    logoImage?.dispose();
+    latteImage?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final size = constraints.biggest;
+      return MouseRegion(
+        cursor: widget.reducedMotion
+            ? MouseCursor.defer
+            : SystemMouseCursors.grab,
+        onHover: (event) => moveTo(event.localPosition, size),
+        onExit: (_) => rest(),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: widget.reducedMotion
+              ? null
+              : (event) => moveTo(event.localPosition, size),
+          onHorizontalDragUpdate: widget.reducedMotion
+              ? null
+              : (event) => moveTo(event.localPosition, size),
+          onHorizontalDragEnd: widget.reducedMotion ? null : (_) => rest(),
+          onHorizontalDragCancel: widget.reducedMotion ? null : rest,
+          child: AnimatedBuilder(
+            animation: Listenable.merge([
+              widget.entrance,
+              widget.idle,
+              horizontal,
+              vertical,
+            ]),
+            builder: (_, _) => CustomPaint(
+              key: const Key('coffee-scene'),
+              painter: CoffeeScenePainter._withBuffers(
+                buffers,
+                progress: widget.entrance.value,
+                idlePhase: widget.idle.value,
+                reducedMotion: widget.reducedMotion,
+                interaction: widget.reducedMotion
+                    ? Offset.zero
+                    : Offset(
+                        horizontal.value.clamp(-1.0, 1.0),
+                        vertical.value.clamp(-1.0, 1.0),
+                      ),
+                logoShader: logoShader,
+                logoSize: logoImage == null
+                    ? Size.zero
+                    : Size(
+                        logoImage!.width.toDouble(),
+                        logoImage!.height.toDouble(),
+                      ),
+                latteShader: latteShader,
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+void _paintLatteTexture(Canvas canvas) {
+  const disk = Rect.fromLTWH(0, 0, 512, 512);
+  canvas.drawOval(
+    disk,
+    Paint()
+      ..shader = const RadialGradient(
+        center: Alignment(-.22, -.3),
+        radius: 1,
+        colors: [Color(0xFFD9AA6E), Color(0xFFC18A4E), Color(0xFF8B4B24)],
+        stops: [0, .77, 1],
+      ).createShader(disk),
+  );
+  canvas.drawOval(
+    disk.deflate(15),
+    Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 7
+      ..color = const Color(0xFFE9C993).withValues(alpha: .8),
+  );
+  Path heart(double scale) {
+    final path = Path();
+    for (var i = 0; i <= 100; i++) {
+      final t = i / 100 * math.pi * 2;
+      final x = 16 * math.pow(math.sin(t), 3);
+      final y =
+          13 * math.cos(t) -
+          5 * math.cos(2 * t) -
+          2 * math.cos(3 * t) -
+          math.cos(4 * t);
+      final point = Offset(256 + x * scale, 236 - y * scale);
+      if (i == 0) {
+        path.moveTo(point.dx, point.dy);
+      } else {
+        path.lineTo(point.dx, point.dy);
+      }
+    }
+    return path..close();
+  }
+
+  for (final (scale, color) in const [
+    (10.1, Color(0xFFFFF3D8)),
+    (8.5, Color(0xFFC18A4E)),
+    (7.2, Color(0xFFFFF3D8)),
+    (5.8, Color(0xFFC18A4E)),
+    (4.5, Color(0xFFFFF3D8)),
+  ]) {
+    canvas.drawPath(heart(scale), Paint()..color = color);
+  }
+  final pull = Path()
+    ..moveTo(256, 223)
+    ..quadraticBezierTo(250, 336, 264, 417);
+  canvas.drawPath(
+    pull,
+    Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0xFFFFF3D8),
+  );
+}
+
 class CoffeeScenePainter extends CustomPainter {
   CoffeeScenePainter({
+    required double progress,
+    required bool reducedMotion,
+    double idlePhase = 0,
+    Offset interaction = Offset.zero,
+    ui.ImageShader? logoShader,
+    Size logoSize = Size.zero,
+    ui.ImageShader? latteShader,
+  }) : this._withBuffers(
+         _CoffeeRenderBuffers(),
+         progress: progress,
+         reducedMotion: reducedMotion,
+         idlePhase: idlePhase,
+         interaction: interaction,
+         logoShader: logoShader,
+         logoSize: logoSize,
+         latteShader: latteShader,
+       );
+
+  CoffeeScenePainter._withBuffers(
+    this._buffers, {
     required this.progress,
     required this.reducedMotion,
     this.idlePhase = 0,
+    this.interaction = Offset.zero,
+    this.logoShader,
+    this.logoSize = Size.zero,
+    this.latteShader,
   });
-
-  final double progress;
+  final double progress, idlePhase;
   final bool reducedMotion;
-  final double idlePhase;
-  static const _cream = Color(0xFFF5E8D6);
-  static const _lid = Color(0xFFFFF5E8);
-  static const _light = _Vector(-.45, .65, 1);
+  final Offset interaction;
+  final ui.ImageShader? logoShader, latteShader;
+  final Size logoSize;
+  final _CoffeeRenderBuffers _buffers;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final time = reducedMotion ? 1.0 : progress;
-    final idleAngle = reducedMotion ? 0.0 : idlePhase * math.pi * 2;
+    if (size.isEmpty || !size.width.isFinite || !size.height.isFinite) return;
+    final p = reducedMotion
+        ? 1.0
+        : (progress.isFinite ? progress.clamp(0.0, 1.0) : 1.0);
+    final phase = reducedMotion || !idlePhase.isFinite
+        ? 0.0
+        : (idlePhase % 1) * math.pi * 2;
+    final enter = Curves.easeOutCubic.transform(p);
     final arrival = reducedMotion
         ? 1.0
-        : Curves.easeOutBack.transform((time / .25).clamp(0.0, 1.0));
-    final turn = Curves.easeInOutCubic.transform(
-      ((time - .05) / .78).clamp(0.0, 1.0),
-    );
-    final yaw = reducedMotion
-        ? -.14
-        : -.65 + math.pi * 2 * turn + .51 * turn + math.sin(idleAngle) * .18;
+        : Curves.easeOutBack.transform((p / .7).clamp(0.0, 1.0));
+    double safe(double value) => value.isFinite ? value.clamp(-1.0, 1.0) : 0;
     final tilt = reducedMotion
-        ? .27
-        : .27 + math.sin(time * math.pi * 2 + idleAngle) * .08;
-    final roll = reducedMotion
-        ? -.08
-        : -.08 + math.sin(time * math.pi * 2 + idleAngle) * .1;
-    final float = reducedMotion
-        ? 0.0
-        : math.sin(time * math.pi * 3 + idleAngle) * .09;
-    final unit = math.min(size.width / 4.5, size.height / 4.25);
-    final center = Offset(size.width / 2, size.height * .51);
+        ? Offset.zero
+        : Offset(safe(interaction.dx), safe(interaction.dy));
+    final rotation = _CoffeeRotation(
+      -.12 - 1.1 * (1 - enter) + math.sin(phase) * .19 + tilt.dx * .4,
+      .49 + (1 - enter) * .08 + math.sin(phase) * .025 - tilt.dy * .13,
+      -.035 + math.sin(phase) * .035 + tilt.dx * .045,
+    );
+    final frame = _CoffeeFrame(size, rotation, arrival);
+    final float = math.sin(phase) * .065;
+    final groups = <_CoffeeGroup>[
+      _CoffeeGroup(
+        _CoffeeRotation.identity,
+        _Vector(0, float - (1 - enter) * .2, 0),
+        1.1,
+      ),
+      _CoffeeGroup(
+        _CoffeeRotation.identity,
+        _Vector(0, math.sin(phase + .7) * .012, 0),
+        1,
+      ),
+      for (var i = 0; i < 5; i++)
+        _CoffeeGroup(
+          _CoffeeRotation(
+            phase + i * 1.1,
+            .25 + math.sin(phase * 2 + i) * .4,
+            phase + i * .7,
+          ),
+          _Vector(
+            math.cos(phase + i * math.pi * 2 / 5) * 1.85,
+            .2 + math.sin(phase * 2 + i * .9) * .49,
+            math.sin(phase + i * math.pi * 2 / 5) * 1.47,
+          ),
+          .78 *
+              (reducedMotion
+                  ? 1
+                  : Curves.easeOutCubic.transform(
+                      ((p - .09 - i * .035) / .64).clamp(0.0, 1.0),
+                    )),
+        ),
+    ];
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+    _drawStudio(canvas, frame, float, phase);
+    if (arrival > .015) {
+      _drawOrbit(canvas, frame, false);
+      _buffers.update(frame, groups, latteShader != null);
+      _buffers.draw(canvas, _buffers.mainOrder, latteShader);
+      _drawLogo(canvas, frame, groups.first);
+      _drawOrbit(canvas, frame, true);
+      _buffers.draw(canvas, _buffers.frontOrder, latteShader);
+      _drawSteam(canvas, frame, groups.first, phase);
+    }
+    canvas.restore();
+  }
 
-    _Vector rotate(_Vector p) {
-      final x = p.x * math.cos(yaw) + p.z * math.sin(yaw);
-      final z = -p.x * math.sin(yaw) + p.z * math.cos(yaw);
-      final y = p.y * math.cos(tilt) - z * math.sin(tilt);
-      final depth = p.y * math.sin(tilt) + z * math.cos(tilt);
-      return _Vector(
-        x * math.cos(roll) - y * math.sin(roll),
-        x * math.sin(roll) + y * math.cos(roll),
-        depth,
+  void _drawStudio(
+    Canvas canvas,
+    _CoffeeFrame frame,
+    double float,
+    double phase,
+  ) {
+    final glow = Rect.fromCenter(
+      center: frame.center.translate(0, -frame.unit * .2),
+      width: frame.unit * 5,
+      height: frame.unit * 4.5,
+    );
+    if (_buffers.glowRect != glow) {
+      _buffers.glowRect = glow;
+      _buffers.glow = const RadialGradient(
+        colors: [Color(0x284EB5AF), Color(0x000E6F7A)],
+      ).createShader(glow);
+    }
+    canvas.drawOval(glow, Paint()..shader = _buffers.glow);
+    final floor = frame.center + Offset(0, frame.unit * 1.7);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: floor,
+        width: frame.unit * 3.4,
+        height: frame.unit * .4,
+      ),
+      Paint()
+        ..color = AppColors.gold.withValues(
+          alpha: .035 * frame.arrival.clamp(0.0, 1.0),
+        )
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
+    );
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: floor,
+        width: frame.unit * (2.8 - float),
+        height: frame.unit * .22,
+      ),
+      Paint()
+        ..color = const Color(0xFF03262C)
+            .withValues(alpha: .65 * frame.arrival.clamp(0.0, 1.0))
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+    );
+    for (var i = 0; i < 7; i++) {
+      final angle = i * 2.399 + phase;
+      final point = frame.project(
+        _Vector(math.cos(angle) * 2.04, math.sin(angle) * 1.45 + .2, -.8),
+      );
+      final pulse = .15 + .2 * math.pow(math.sin(phase + i), 2);
+      canvas.drawCircle(
+        point,
+        (i % 3 == 0 ? 1.8 : 1.1) * frame.arrival,
+        Paint()
+          ..color = (i.isEven ? AppColors.gold : AppColors.muted).withValues(
+            alpha: pulse,
+          ),
       );
     }
+  }
 
-    Offset project(_Vector p) {
-      final perspective = 7 / (7 - p.z);
-      return center +
-          Offset(p.x, -p.y - float) * (unit * perspective * arrival);
+  void _drawOrbit(Canvas canvas, _CoffeeFrame frame, bool front) {
+    final path = Path();
+    var connected = false;
+    for (var i = 0; i <= 96; i++) {
+      final angle = i / 96 * math.pi * 2;
+      final world = _Vector(
+        math.cos(angle) * 2.03,
+        -.26 + math.sin(angle) * .08,
+        math.sin(angle) * 1.8,
+      );
+      final camera = frame.rotation.rotate(world);
+      if ((camera.z > .1) != front) {
+        connected = false;
+        continue;
+      }
+      final point = frame.projectCamera(camera);
+      if (connected) {
+        path.lineTo(point.dx, point.dy);
+      } else {
+        path.moveTo(point.dx, point.dy);
+        connected = true;
+      }
     }
-
-    final glowRect = Rect.fromCenter(
-      center: center,
-      width: unit * 4.5,
-      height: unit * 4.5,
-    );
-    canvas.drawOval(
-      glowRect,
+    canvas.drawPath(
+      path,
       Paint()
-        ..shader = RadialGradient(
-          colors: [
-            const Color(0xFF4EB5AF).withValues(alpha: .21),
-            AppColors.teal.withValues(alpha: 0),
-          ],
-        ).createShader(glowRect),
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = .65
+        ..color = AppColors.gold.withValues(alpha: front ? .19 : .11),
     );
+  }
 
-    final shadow = Rect.fromCenter(
-      center: center + Offset(0, unit * 1.65),
-      width: unit * (2.15 - float),
-      height: unit * .25,
-    );
-    canvas.drawOval(
-      shadow,
-      Paint()
-        ..color = const Color(0xFF031D22)
-            .withValues(alpha: .34 * arrival.clamp(0, 1))
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, unit * .15),
-    );
-
-    // Fine orbital paths sit behind the sculpture; their moving beads add depth.
-    for (var orbit = 0; orbit < 2; orbit++) {
+  void _drawSteam(
+    Canvas canvas,
+    _CoffeeFrame frame,
+    _CoffeeGroup cup,
+    double phase,
+  ) {
+    for (var strand = 0; strand < 3; strand++) {
+      final cycle = reducedMotion
+          ? .45 + strand * .13
+          : (phase / (2 * math.pi) * 2 + strand / 3) % 1;
+      final alpha = math.sin(cycle * math.pi) * .19;
       final path = Path();
-      for (var i = 0; i <= 100; i++) {
-        final angle = math.pi * 2 * i / 100;
-        final point = project(
+      for (var step = 0; step <= 22; step++) {
+        final t = step / 22;
+        final point = frame.project(
           _Vector(
-            math.cos(angle) * (1.92 + orbit * .12),
-            math.sin(angle) * (.44 + orbit * .15) - .1,
-            math.sin(angle) * .6,
+            (strand - 1) * .2 +
+                math.sin(t * 5 + cycle * 3 + strand) * (.035 + t * .09),
+            1.24 + cup.offset.y + cycle * .3 + t * .82,
+            -.08 + math.sin(t * 3 + strand) * .08,
           ),
         );
-        if (i == 0) {
+        if (step == 0) {
           path.moveTo(point.dx, point.dy);
         } else {
           path.lineTo(point.dx, point.dy);
@@ -8482,333 +8849,646 @@ class CoffeeScenePainter extends CustomPainter {
         path,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = .7
-          ..color = AppColors.muted.withValues(alpha: orbit == 0 ? .19 : .08),
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = 1.6
+          ..color = AppColors.white.withValues(alpha: alpha)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2),
       );
     }
+  }
 
-    final surfaces = <_Surface>[];
-    final lettering = <_Surface>[];
-    final beans = <_Surface>[];
-    void addFace(List<_Vector> points, Color color, _Vector normal) {
-      final transformed = points.map(rotate).toList(growable: false);
-      final light = math.max(
-        0.0,
-        rotate(normal).normalized.dot(_light.normalized),
-      );
-      final brightness = .57 + .43 * light;
-      final shade = Color.fromARGB(
-        255,
-        (color.r * 255 * brightness).round().clamp(0, 255),
-        (color.g * 255 * brightness).round().clamp(0, 255),
-        (color.b * 255 * brightness).round().clamp(0, 255),
-      );
-      final path = Path()..addPolygon(transformed.map(project).toList(), true);
-      surfaces.add(
-        _Surface(
-          transformed.fold(0.0, (sum, p) => sum + p.z) / transformed.length,
-          (canvas) {
-            final paint = Paint()
-              ..color = shade
-              ..isAntiAlias = false;
-            canvas.drawPath(path, paint);
-            canvas.drawPath(
-              path,
-              paint
-                ..style = PaintingStyle.stroke
-                ..strokeWidth = .5,
-            );
-          },
-        ),
-      );
+  void _drawLogo(Canvas canvas, _CoffeeFrame frame, _CoffeeGroup cup) {
+    const columns = 18, rows = 4;
+    final indices = <int>[];
+    for (var y = 0; y <= rows; y++) {
+      for (var x = 0; x <= columns; x++) {
+        final u = x / columns, v = y / rows;
+        final angle = math.pi / 2 + (.5 - u) * 1.55;
+        final height = .43 - v * 1.0;
+        final radius = .70 + (height + .96) / 1.62 * .21 + .014;
+        final model = _Vector(
+          radius * math.cos(angle),
+          height,
+          radius * math.sin(angle),
+        );
+        final normal = frame.rotation.rotate(
+          _Vector(math.cos(angle), -.13, math.sin(angle)).normalized,
+        );
+        final point = frame.project(cup.point(model));
+        final i = y * (columns + 1) + x;
+        _buffers.logoPositions[i * 2] = point.dx;
+        _buffers.logoPositions[i * 2 + 1] = point.dy;
+        _buffers.logoUv[i * 2] = u * logoSize.width;
+        _buffers.logoUv[i * 2 + 1] = v * logoSize.height;
+        final shade = (200 + 55 * math.max(0.0, normal.z)).round();
+        _buffers.logoColors[i] = Color.fromARGB(
+          255,
+          shade,
+          shade,
+          shade,
+        ).toARGB32();
+        _buffers.logoFacing[i] = normal.z;
+      }
     }
-
-    void lathe(List<(double, double)> rings, Color color) {
-      const segments = 80;
-      for (var ring = 0; ring < rings.length - 1; ring++) {
-        final (bottom, lowerRadius) = rings[ring];
-        final (top, upperRadius) = rings[ring + 1];
-        for (var segment = 0; segment < segments; segment++) {
-          final a = segment * math.pi * 2 / segments;
-          final b = (segment + 1) * math.pi * 2 / segments;
-          final middle = (a + b) / 2;
-          addFace(
-            [
-              _Vector(
-                lowerRadius * math.cos(a),
-                bottom,
-                lowerRadius * math.sin(a),
-              ),
-              _Vector(
-                lowerRadius * math.cos(b),
-                bottom,
-                lowerRadius * math.sin(b),
-              ),
-              _Vector(
-                upperRadius * math.cos(b),
-                top,
-                upperRadius * math.sin(b),
-              ),
-              _Vector(
-                upperRadius * math.cos(a),
-                top,
-                upperRadius * math.sin(a),
-              ),
-            ],
-            color,
-            _Vector(
-              math.cos(middle),
-              (lowerRadius - upperRadius) / math.max(.001, top - bottom),
-              math.sin(middle),
-            ),
-          );
+    if (logoShader == null) {
+      final facing = frame.rotation.rotate(const _Vector(0, 0, 1)).z;
+      if (facing < .1) return;
+      final heart = Path();
+      for (var i = 0; i <= 40; i++) {
+        final t = i / 40 * math.pi * 2;
+        final x = .026 * 16 * math.pow(math.sin(t), 3);
+        final y =
+            .026 *
+                (13 * math.cos(t) -
+                    5 * math.cos(2 * t) -
+                    2 * math.cos(3 * t) -
+                    math.cos(4 * t)) -
+            .05;
+        final radius = .70 + (y + .96) / 1.62 * .21 + .015;
+        final point = frame.project(
+          cup.point(
+            _Vector(x, y, math.sqrt(math.max(0.0, radius * radius - x * x))),
+          ),
+        );
+        if (i == 0) {
+          heart.moveTo(point.dx, point.dy);
+        } else {
+          heart.lineTo(point.dx, point.dy);
+        }
+      }
+      canvas.drawPath(heart..close(), Paint()..color = AppColors.white);
+      return;
+    }
+    for (var y = 0; y < rows; y++) {
+      for (var x = 0; x < columns; x++) {
+        final a = y * (columns + 1) + x,
+            b = a + 1,
+            c = a + columns + 1,
+            d = c + 1;
+        if (_buffers.logoFacing[a] + _buffers.logoFacing[b] > .2) {
+          indices.addAll([a, b, c, b, d, c]);
         }
       }
     }
-
-    // Adjacent material bands share edges instead of overlapping cylinders.
-    lathe([(-1.33, .66), (-1.29, .70), (-.80, .751), (-.78, .775)], _cream);
-    lathe([(-.72, .783), (.43, .901)], AppColors.teal);
-    lathe([(-.78, .775), (-.72, .783)], AppColors.coral);
-    lathe([(.43, .901), (.47, .907)], AppColors.coral);
-    lathe([(.47, .907), (.49, .885), (1.02, .94), (1.09, .95)], _cream);
-    lathe([
-      (1.04, .96),
-      (1.08, 1.035),
-      (1.14, 1.04),
-      (1.18, 1.0),
-      (1.21, .975),
-      (1.34, .93),
-      (1.39, .87),
-    ], _lid);
-    addFace(
-      List.generate(64, (i) {
-        final angle = i * math.pi * 2 / 64;
-        return _Vector(.87 * math.cos(angle), 1.39, .87 * math.sin(angle));
-      }),
-      _lid,
-      const _Vector(0, 1, 0),
+    if (indices.isEmpty) return;
+    final vertices = ui.Vertices.raw(
+      ui.VertexMode.triangles,
+      _buffers.logoPositions,
+      colors: _buffers.logoColors,
+      textureCoordinates: _buffers.logoUv,
+      indices: Uint16List.fromList(indices),
     );
-    // The sip opening sits on the lid's top plane.
-    addFace(
-      List.generate(20, (i) {
-        final angle = i * math.pi * 2 / 20;
-        return _Vector(
-          .22 * math.cos(angle),
-          1.397,
-          .57 + .07 * math.sin(angle),
-        );
-      }),
-      const Color(0xFF715A49),
-      const _Vector(0, 1, 0),
+    canvas.drawVertices(
+      vertices,
+      BlendMode.modulate,
+      Paint()
+        ..shader = logoShader
+        ..filterQuality = FilterQuality.medium,
     );
-
-    void label(
-      String text,
-      double y,
-      double fontSize,
-      double spacing,
-      Color color,
-    ) {
-      for (var i = 0; i < text.length; i++) {
-        final angle = math.pi / 2 - (i - (text.length - 1) / 2) * spacing;
-        final radius = .70 + (y + 1.29) * .104 + .024;
-        final position = rotate(
-          _Vector(radius * math.cos(angle), y, radius * math.sin(angle)),
-        );
-        final normal = rotate(_Vector(math.cos(angle), 0, math.sin(angle)));
-        if (normal.z <= .12) continue;
-        final painter = TextPainter(
-          text: TextSpan(
-            text: text[i],
-            style: TextStyle(
-              color: color,
-              fontSize: unit * fontSize,
-              fontFamily: 'Montserrat',
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        final projected = project(position);
-        final perspective = 7 / (7 - position.z);
-        lettering.add(
-          _Surface(position.z + .025, (canvas) {
-            canvas.save();
-            canvas.translate(projected.dx, projected.dy);
-            canvas.rotate(-roll);
-            canvas.scale(
-              perspective * arrival * normal.z,
-              perspective * arrival,
-            );
-            painter.paint(
-              canvas,
-              Offset(-painter.width / 2, -painter.height / 2),
-            );
-            canvas.restore();
-            painter.dispose();
-          }),
-        );
-      }
-    }
-
-    label('SMOOCH', -.03, .265, .205, AppColors.white);
-    label('CAFE', -.36, .14, .17, AppColors.white);
-
-    for (var i = 0; i < 5; i++) {
-      final angle =
-          i * math.pi * 2 / 5 +
-          (reducedMotion ? .3 : time * math.pi * 2 * .8 + idleAngle);
-      final position = _Vector(
-        math.cos(angle) * 1.74,
-        math.sin(angle * 1.4 + i) * .8 + .1,
-        math.sin(angle) * 1.5,
-      );
-      final point = project(position);
-      final beanSize =
-          unit * (.13 + i % 2 * .035) * 7 / (7 - position.z) * arrival;
-      beans.add(
-        _Surface(position.z, (canvas) {
-          canvas.save();
-          canvas.translate(point.dx, point.dy);
-          canvas.rotate(angle + .55);
-          final rect = Rect.fromCenter(
-            center: Offset.zero,
-            width: beanSize * 1.4,
-            height: beanSize * 2.05,
-          );
-          canvas.drawOval(
-            rect.shift(Offset(beanSize * .12, beanSize * .18)),
-            Paint()
-              ..color = Colors.black.withValues(alpha: .16)
-              ..maskFilter = MaskFilter.blur(BlurStyle.normal, beanSize * .2),
-          );
-          canvas.drawOval(
-            rect,
-            Paint()
-              ..shader = const RadialGradient(
-                center: Alignment(-.6, -.5),
-                radius: 1.4,
-                colors: [
-                  Color(0xFFC58A58),
-                  Color(0xFF7C482E),
-                  Color(0xFF3B211B),
-                ],
-                stops: [0, .5, 1],
-              ).createShader(rect),
-          );
-          final seam = Path()
-            ..moveTo(0, -beanSize * .85)
-            ..cubicTo(
-              -beanSize * .55,
-              -beanSize * .25,
-              beanSize * .5,
-              beanSize * .2,
-              0,
-              beanSize * .85,
-            );
-          canvas.drawPath(
-            seam,
-            Paint()
-              ..color = const Color(0xFF301F1A)
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = beanSize * .13
-              ..strokeCap = StrokeCap.round,
-          );
-          canvas.restore();
-        }),
-      );
-    }
-
-    beans.sort((a, b) => a.depth.compareTo(b.depth));
-    for (final bean in beans.where((bean) => bean.depth < 0)) {
-      bean.draw(canvas);
-    }
-    surfaces.sort((a, b) => a.depth.compareTo(b.depth));
-    for (final surface in surfaces) {
-      surface.draw(canvas);
-    }
-    for (final letter in lettering) {
-      letter.draw(canvas);
-    }
-    for (final bean in beans.where((bean) => bean.depth >= 0)) {
-      bean.draw(canvas);
-    }
-
-    // Steam is intentionally soft and sparse, keeping the cup as the focal point.
-    for (var i = 0; i < 3; i++) {
-      final phase = reducedMotion
-          ? .45 + i * .1
-          : (time * 1.8 + idlePhase * 2 + i / 3) % 1;
-      final alpha = math.sin(phase * math.pi) * .24 * arrival.clamp(0, 1);
-      final start = project(_Vector((i - 1) * .25, 1.46 + phase * .5, 0));
-      final drift = math.sin(phase * math.pi * 2 + i) * unit * .13;
-      final path = Path()
-        ..moveTo(start.dx, start.dy)
-        ..cubicTo(
-          start.dx + drift,
-          start.dy - unit * .18,
-          start.dx - drift,
-          start.dy - unit * .34,
-          start.dx + drift * .5,
-          start.dy - unit * .49,
-        );
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = AppColors.white.withValues(alpha: alpha)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.2
-          ..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
-      );
-    }
-
-    for (var i = 0; i < 10; i++) {
-      final angle = i * 2.4 + (reducedMotion ? 0 : time * .6 + idleAngle);
-      final distance = 1.55 + (i % 3) * .22;
-      final point = project(
-        _Vector(math.cos(angle) * distance, math.sin(angle) * 1.5, -.5),
-      );
-      final pulse = reducedMotion
-          ? .6
-          : .45 + .3 * math.sin(time * 8 + idleAngle + i);
-      canvas.drawCircle(
-        point,
-        i % 3 == 0 ? 2.1 : 1.2,
-        Paint()
-          ..color = (i.isEven ? AppColors.coral : AppColors.muted).withValues(
-            alpha: pulse,
-          ),
-      );
-    }
+    vertices.dispose();
   }
 
   @override
   bool shouldRepaint(CoffeeScenePainter oldDelegate) =>
       progress != oldDelegate.progress ||
       idlePhase != oldDelegate.idlePhase ||
-      reducedMotion != oldDelegate.reducedMotion;
+      reducedMotion != oldDelegate.reducedMotion ||
+      interaction != oldDelegate.interaction ||
+      logoShader != oldDelegate.logoShader ||
+      latteShader != oldDelegate.latteShader;
+}
+
+class _CoffeeFrame {
+  _CoffeeFrame(this.size, this.rotation, this.arrival)
+    : unit = math.min(size.width / 4.6, size.height / 4.6),
+      center = Offset(size.width * .485, size.height * .48);
+  final Size size;
+  final _CoffeeRotation rotation;
+  final double arrival, unit;
+  final Offset center;
+  Offset project(_Vector point) => projectCamera(rotation.rotate(point));
+  Offset projectCamera(_Vector point) {
+    final perspective = 7 / (7 - point.z);
+    return center + Offset(point.x, -point.y) * (unit * perspective * arrival);
+  }
+}
+
+class _CoffeeRotation {
+  _CoffeeRotation(double yaw, double pitch, double roll)
+    : cy = math.cos(yaw),
+      sy = math.sin(yaw),
+      cp = math.cos(pitch),
+      sp = math.sin(pitch),
+      cr = math.cos(roll),
+      sr = math.sin(roll);
+  static final identity = _CoffeeRotation(0, 0, 0);
+  final double cy, sy, cp, sp, cr, sr;
+  _Vector rotate(_Vector point) {
+    final x = point.x * cy + point.z * sy, z = -point.x * sy + point.z * cy;
+    final y = point.y * cp - z * sp, depth = point.y * sp + z * cp;
+    return _Vector(x * cr - y * sr, x * sr + y * cr, depth);
+  }
+}
+
+class _CoffeeGroup {
+  const _CoffeeGroup(this.rotation, this.offset, this.scale);
+  final _CoffeeRotation rotation;
+  final _Vector offset;
+  final double scale;
+  _Vector point(_Vector point) => rotation.rotate(point) * scale + offset;
+}
+
+class _CoffeeRenderBuffers {
+  _CoffeeRenderBuffers() {
+    final vertices = _CoffeeMesh.studio.vertices;
+    positions = Float32List(vertices.length * 2);
+    colors = Int32List(vertices.length);
+    uv = Float32List(vertices.length * 2);
+    depths = Float32List(vertices.length);
+    facing = Float32List(vertices.length);
+    faceDepths = Float32List(_CoffeeMesh.studio.triangles.length);
+    indices = Uint16List(_CoffeeMesh.studio.triangles.length * 3);
+    for (var i = 0; i < vertices.length; i++) {
+      final texturePoint = vertices[i].material == 1
+          ? vertices[i].uv
+          : const Offset(516, 256);
+      uv[i * 2] = texturePoint.dx;
+      uv[i * 2 + 1] = texturePoint.dy;
+    }
+  }
+  late final Float32List positions, uv, depths, facing, faceDepths;
+  late final Int32List colors;
+  late final Uint16List indices;
+  final mainOrder = <int>[], frontOrder = <int>[];
+  final logoPositions = Float32List(19 * 5 * 2),
+      logoUv = Float32List(19 * 5 * 2),
+      logoFacing = Float32List(19 * 5);
+  final logoColors = Int32List(19 * 5);
+  Rect? glowRect;
+  Shader? glow;
+  static final keyLight = const _Vector(-.5, .75, 1).normalized;
+  static final fillLight = const _Vector(.8, .3, .2).normalized;
+  static final highlight = (keyLight + const _Vector(0, 0, 1)).normalized;
+  void update(
+    _CoffeeFrame frame,
+    List<_CoffeeGroup> groups,
+    bool texturedCoffee,
+  ) {
+    final mesh = _CoffeeMesh.studio;
+    final foreground = [
+      for (final group in groups) frame.rotation.rotate(group.offset).z > .95,
+    ];
+    for (var i = 0; i < mesh.vertices.length; i++) {
+      final vertex = mesh.vertices[i], group = groups[vertex.group];
+      final camera = frame.rotation.rotate(group.point(vertex.position));
+      final normal = frame.rotation.rotate(
+        group.rotation.rotate(vertex.normal),
+      );
+      final point = frame.projectCamera(camera);
+      positions[i * 2] = point.dx;
+      positions[i * 2 + 1] = point.dy;
+      depths[i] = camera.z;
+      facing[i] = normal.z;
+      final base = vertex.material == 1 && !texturedCoffee
+          ? const Color(0xFFC18A4E)
+          : vertex.color;
+      final diffuse =
+          .44 +
+          .49 * math.max(0.0, normal.dot(keyLight)) +
+          .12 * math.max(0.0, normal.dot(fillLight));
+      final specular =
+          math.pow(math.max(0.0, normal.dot(highlight)), 42) *
+          vertex.gloss *
+          .54;
+      final rim = math.pow(1 - normal.z.abs().clamp(0.0, 1.0), 3) * .075;
+      int channel(double color, double edge) =>
+          (255 * (color * diffuse + specular + edge * rim)).round().clamp(
+            0,
+            255,
+          );
+      colors[i] = Color.fromARGB(
+        255,
+        channel(base.r, 1),
+        channel(base.g, .81),
+        channel(base.b, .48),
+      ).toARGB32();
+    }
+    mainOrder.clear();
+    frontOrder.clear();
+    for (var i = 0; i < mesh.triangles.length; i++) {
+      final face = mesh.triangles[i];
+      if (groups[face.group].scale < .01 ||
+          facing[face.a] + facing[face.b] + facing[face.c] <= -.025) {
+        continue;
+      }
+      faceDepths[i] = (depths[face.a] + depths[face.b] + depths[face.c]) / 3;
+      (face.group >= 2 && foreground[face.group] ? frontOrder : mainOrder).add(
+        i,
+      );
+    }
+    int compare(int a, int b) => faceDepths[a].compareTo(faceDepths[b]);
+    mainOrder.sort(compare);
+    frontOrder.sort(compare);
+  }
+
+  void draw(Canvas canvas, List<int> order, ui.ImageShader? coffee) {
+    if (order.isEmpty) return;
+    final faces = _CoffeeMesh.studio.triangles;
+    var count = 0;
+    for (final index in order) {
+      final face = faces[index];
+      indices[count++] = face.a;
+      indices[count++] = face.b;
+      indices[count++] = face.c;
+    }
+    final vertices = ui.Vertices.raw(
+      ui.VertexMode.triangles,
+      positions,
+      colors: colors,
+      textureCoordinates: coffee == null ? null : uv,
+      indices: Uint16List.sublistView(indices, 0, count),
+    );
+    canvas.drawVertices(
+      vertices,
+      coffee == null ? BlendMode.dst : BlendMode.modulate,
+      Paint()
+        ..shader = coffee
+        ..filterQuality = FilterQuality.medium,
+    );
+    vertices.dispose();
+  }
 }
 
 class _Vector {
   const _Vector(this.x, this.y, this.z);
-  final double x;
-  final double y;
-  final double z;
-
+  final double x, y, z;
+  _Vector operator +(_Vector other) =>
+      _Vector(x + other.x, y + other.y, z + other.z);
+  _Vector operator -(_Vector other) =>
+      _Vector(x - other.x, y - other.y, z - other.z);
+  _Vector operator *(double factor) =>
+      _Vector(x * factor, y * factor, z * factor);
   _Vector get normalized {
     final length = math.sqrt(x * x + y * y + z * z);
-    return _Vector(x / length, y / length, z / length);
+    return length <= 1e-10 ? const _Vector(0, 1, 0) : this * (1 / length);
   }
 
   double dot(_Vector other) => x * other.x + y * other.y + z * other.z;
 }
 
-class _Surface {
-  const _Surface(this.depth, this.draw);
-  final double depth;
-  final void Function(Canvas canvas) draw;
+class _CoffeeVertex {
+  const _CoffeeVertex({
+    required this.position,
+    required this.normal,
+    required this.color,
+    required this.group,
+    this.material = 0,
+    this.uv = Offset.zero,
+    this.gloss = .5,
+  });
+
+  final _Vector position;
+  final _Vector normal;
+  final Color color;
+  final int group;
+  final int material;
+  final Offset uv;
+  final double gloss;
+}
+
+class _CoffeeTriangle {
+  const _CoffeeTriangle(this.a, this.b, this.c, this.material, this.group);
+  final int a, b, c, material, group;
+}
+
+class _CoffeeMesh {
+  const _CoffeeMesh(this.vertices, this.triangles);
+  final List<_CoffeeVertex> vertices;
+  final List<_CoffeeTriangle> triangles;
+  static final studio = _buildStudio();
+
+  static _CoffeeMesh _buildStudio() {
+    final mesh = _CoffeeMeshBuilder();
+    const teal = Color(0xFF0E6F7A);
+    const cream = Color(0xFFF5E8D6);
+    const innerCream = Color(0xFFEADCC8);
+    const gold = Color(0xFFE9C587);
+
+    mesh.lathe(
+      const [
+        (-1.15, .56),
+        (-1.12, .64),
+        (-.96, .70),
+        (-.35, .81),
+        (.30, .88),
+        (.66, .91),
+        (.90, .933),
+      ],
+      teal,
+      group: 0,
+      gloss: .82,
+    );
+    mesh.disk(
+      y: -1.15,
+      radius: .56,
+      color: teal,
+      group: 0,
+      up: false,
+      gloss: .55,
+    );
+
+    // Adjacent bands share their boundaries. Overlapping the body and lip
+    // would produce depth-sorting artifacts as the floating mug rotates.
+    mesh.lathe(const [(.90, .933), (.93, .936)], gold, group: 0, gloss: .85);
+    // The profile travels up the outside, over the rounded lip and down
+    // into the opening, giving the inner section inward-facing normals.
+    mesh.lathe(
+      const [
+        (.93, .936),
+        (1.05, .958),
+        (1.12, .958),
+        (1.18, .91),
+        (1.18, .86),
+        (1.10, .84),
+      ],
+      cream,
+      group: 0,
+      gloss: .68,
+    );
+    mesh.lathe(
+      const [(1.10, .84), (.72, .81), (-.86, .60), (-.99, .57)],
+      innerCream,
+      group: 0,
+      gloss: .40,
+    );
+    mesh.disk(y: -.99, radius: .57, color: innerCream, group: 0, gloss: .35);
+
+    mesh.handle(color: teal, group: 0);
+
+    // Closed cream saucer: underside -> outer rim -> concave upper dish.
+    mesh.lathe(
+      const [
+        (-1.72, 0.0),
+        (-1.72, 1.22),
+        (-1.65, 1.42),
+        (-1.60, 1.43),
+        (-1.54, 1.35),
+        (-1.64, .88),
+        (-1.64, 0.0),
+      ],
+      cream,
+      group: 1,
+      gloss: .58,
+    );
+    mesh.lathe(
+      const [(-1.615, 1.438), (-1.588, 1.431)],
+      gold,
+      group: 1,
+      gloss: .82,
+    );
+
+    // The visible liquid is below the ceramic lip. Texture coordinates
+    // are pixel coordinates for the root renderer's 512px coffee artwork.
+    mesh.disk(
+      y: 1.075,
+      radius: .835,
+      color: const Color(0xFFFFFFFF),
+      group: 0,
+      material: 1,
+      segments: 48,
+      gloss: .36,
+    );
+
+    const browns = [
+      Color(0xFFA86B3D),
+      Color(0xFFB77945),
+      Color(0xFF9A592F),
+      Color(0xFFC0874D),
+      Color(0xFFAD6B38),
+    ];
+    for (var index = 0; index < 5; index++) {
+      mesh.bean(color: browns[index], group: index + 2);
+    }
+    return _CoffeeMesh(
+      List<_CoffeeVertex>.unmodifiable(mesh.vertices),
+      List<_CoffeeTriangle>.unmodifiable(mesh.triangles),
+    );
+  }
+}
+
+class _CoffeeMeshBuilder {
+  final vertices = <_CoffeeVertex>[];
+  final triangles = <_CoffeeTriangle>[];
+
+  int vertex(
+    _Vector position,
+    _Vector normal,
+    Color color, {
+    required int group,
+    int material = 0,
+    double gloss = .5,
+    Offset uv = Offset.zero,
+  }) {
+    vertices.add(
+      _CoffeeVertex(
+        position: position,
+        normal: normal.normalized,
+        color: color,
+        group: group,
+        material: material,
+        gloss: gloss,
+        uv: uv,
+      ),
+    );
+    return vertices.length - 1;
+  }
+
+  void triangle(int a, int b, int c) {
+    final first = vertices[a], second = vertices[b], third = vertices[c];
+    final u = second.position - first.position;
+    final v = third.position - first.position;
+    final cross = _Vector(
+      u.y * v.z - u.z * v.y,
+      u.z * v.x - u.x * v.z,
+      u.x * v.y - u.y * v.x,
+    );
+    // At pole rings one half of each quad collapses to zero area.
+    if (cross.dot(cross) < 1e-14) return;
+    final normal = first.normal + second.normal + third.normal;
+    final flip = cross.dot(normal) < 0;
+    triangles.add(
+      _CoffeeTriangle(
+        a,
+        flip ? c : b,
+        flip ? b : c,
+        first.material,
+        first.group,
+      ),
+    );
+  }
+
+  void lathe(
+    List<(double, double)> profile,
+    Color color, {
+    required int group,
+    double gloss = .5,
+    int segments = 40,
+  }) {
+    final start = vertices.length;
+    for (var ring = 0; ring < profile.length; ring++) {
+      final (y, radius) = profile[ring];
+      final before = profile[ring == 0 ? ring : ring - 1];
+      final after = profile[ring == profile.length - 1 ? ring : ring + 1];
+      final dy = after.$1 - before.$1;
+      final dr = after.$2 - before.$2;
+      for (var segment = 0; segment <= segments; segment++) {
+        final angle = segment * math.pi * 2 / segments;
+        final cos = math.cos(angle), sin = math.sin(angle);
+        vertex(
+          _Vector(radius * cos, y, radius * sin),
+          _Vector(dy * cos, -dr, dy * sin),
+          color,
+          group: group,
+          gloss: gloss,
+        );
+      }
+    }
+    final stride = segments + 1;
+    for (var ring = 0; ring < profile.length - 1; ring++) {
+      for (var segment = 0; segment < segments; segment++) {
+        final a = start + ring * stride + segment;
+        final b = a + 1, c = a + stride, d = c + 1;
+        triangle(a, b, c);
+        triangle(b, d, c);
+      }
+    }
+  }
+
+  void disk({
+    required double y,
+    required double radius,
+    required Color color,
+    required int group,
+    bool up = true,
+    int segments = 40,
+    int material = 0,
+    double gloss = .5,
+  }) {
+    final normal = _Vector(0, up ? 1 : -1, 0);
+    final center = vertex(
+      _Vector(0, y, 0),
+      normal,
+      color,
+      group: group,
+      material: material,
+      gloss: gloss,
+      uv: const Offset(256, 256),
+    );
+    for (var index = 0; index <= segments; index++) {
+      final angle = index * math.pi * 2 / segments;
+      final cos = math.cos(angle), sin = math.sin(angle);
+      vertex(
+        _Vector(radius * cos, y, radius * sin),
+        normal,
+        color,
+        group: group,
+        material: material,
+        gloss: gloss,
+        uv: Offset(256 + cos * 255, 256 + sin * 255),
+      );
+      if (index > 0) triangle(center, center + index, center + index + 1);
+    }
+  }
+
+  void handle({required Color color, required int group}) {
+    const around = 24, tubeSegments = 8;
+    const rx = .52, ry = .66, tube = .11;
+    final start = vertices.length;
+    for (var ring = 0; ring <= around; ring++) {
+      final angle = ring * math.pi * 2 / around;
+      final cos = math.cos(angle), sin = math.sin(angle);
+      final center = _Vector(1.04 + rx * cos, ry * sin, 0);
+      // The ellipse gradient is perpendicular to its tangent. A radial
+      // vector would skew highlights at the narrow ends of the oval.
+      final outward = _Vector(cos / rx, sin / ry, 0).normalized;
+      for (var segment = 0; segment <= tubeSegments; segment++) {
+        final phi = segment * math.pi * 2 / tubeSegments;
+        final normal = outward * math.cos(phi) + _Vector(0, 0, math.sin(phi));
+        vertex(center + normal * tube, normal, color, group: group, gloss: .82);
+      }
+    }
+    const stride = tubeSegments + 1;
+    for (var ring = 0; ring < around; ring++) {
+      for (var segment = 0; segment < tubeSegments; segment++) {
+        final a = start + ring * stride + segment;
+        triangle(a, a + 1, a + stride);
+        triangle(a + 1, a + stride + 1, a + stride);
+      }
+    }
+  }
+
+  void bean({required Color color, required int group}) {
+    const rx = .16, ry = .25, rz = .11;
+    const latitudeSteps = 6, longitudeSteps = 12;
+    final start = vertices.length;
+    for (var latitude = 0; latitude <= latitudeSteps; latitude++) {
+      final phi = latitude * math.pi / latitudeSteps;
+      final sin = math.sin(phi), cos = math.cos(phi);
+      for (var longitude = 0; longitude <= longitudeSteps; longitude++) {
+        final theta = longitude * math.pi * 2 / longitudeSteps;
+        final position = _Vector(
+          rx * sin * math.cos(theta),
+          ry * cos,
+          rz * sin * math.sin(theta),
+        );
+        final normal = _Vector(
+          position.x / (rx * rx),
+          position.y / (ry * ry),
+          position.z / (rz * rz),
+        );
+        vertex(position, normal, color, group: group, gloss: .28);
+      }
+    }
+    const stride = longitudeSteps + 1;
+    for (var latitude = 0; latitude < latitudeSteps; latitude++) {
+      for (var longitude = 0; longitude < longitudeSteps; longitude++) {
+        final a = start + latitude * stride + longitude;
+        triangle(a, a + 1, a + stride);
+        triangle(a + 1, a + stride + 1, a + stride);
+      }
+    }
+
+    // Narrow dark ribbon follows the ellipsoid's positive-z surface.
+    // It is offset only .002 units to avoid coplanar sorting artifacts.
+    final seamStart = vertices.length;
+    const seamSteps = 12;
+    for (var step = 0; step <= seamSteps; step++) {
+      final t = -1 + 2 * step / seamSteps;
+      final y = ry * t * .87;
+      final curve = .04 * math.sin(t * math.pi);
+      final halfWidth = .006 * (1 - .3 * t.abs());
+      for (final side in const [-1.0, 1.0]) {
+        final x = curve + halfWidth * side;
+        final z =
+            rz *
+            math.sqrt(
+              math.max(0.0, 1 - (x / rx) * (x / rx) - (y / ry) * (y / ry)),
+            );
+        vertex(
+          _Vector(x, y, z + .002),
+          _Vector(x / (rx * rx), y / (ry * ry), z / (rz * rz)),
+          const Color(0xFF4A2B1D),
+          group: group,
+          gloss: .06,
+        );
+      }
+      if (step > 0) {
+        final a = seamStart + (step - 1) * 2;
+        triangle(a, a + 1, a + 2);
+        triangle(a + 1, a + 3, a + 2);
+      }
+    }
+  }
 }
 
 // ============================================================

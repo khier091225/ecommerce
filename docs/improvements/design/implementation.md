@@ -1,6 +1,6 @@
 # Design implementation status
 
-This records the earlier 25-plan implementation. A subsequently authorized visual redesign replaced Cafe info with Discover and added shared motion components; see [the latest UI and animation report](../../ui-motion-polish-2026-11-01.md) for the current screens and checks.
+This records the earlier 25-plan implementation. Subsequent user-directed changes replaced Cafe info with Discover, added shared motion components, and removed the extra loading screen in favor of the 3D Start Screen alone. Plan 8 below is historical and must not be reapplied without a new request. See [the latest UI and animation report](../../ui-motion-polish-2026-11-01.md) for the current screens and checks.
 
 Completed on 1 November 2026 (Asia/Manila) after approval to implement all 25 selected findings from the flutter-improve-design review. The approved work is integrated into the existing app. There is no public hosting URL yet, so the social-preview asset/tool are ready while production metadata and crawler verification await hosting.
 

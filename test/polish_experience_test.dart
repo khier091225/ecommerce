@@ -169,9 +169,7 @@ void main() {
       await tester.pumpAndSettle();
       final semantics = tester.ensureSemantics();
       expect(
-        find.bySemanticsLabel(
-          'Browse Pastries. A sweeter pause. Little treats. Big smiles.',
-        ),
+        find.bySemanticsLabel('Browse Pastries. 21 items.'),
         findsOneWidget,
       );
       semantics.dispose();

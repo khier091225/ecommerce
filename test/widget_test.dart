@@ -169,7 +169,7 @@ void main() {
     expect(find.text('Your orders'), findsOneWidget);
     await tester.tap(find.text('Discover'));
     await tester.pumpAndSettle();
-    expect(find.text('Find your Smooch moment.'), findsOneWidget);
+    expect(find.text('Discover Smooch'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
